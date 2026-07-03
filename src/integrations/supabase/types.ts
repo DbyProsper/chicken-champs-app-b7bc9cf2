@@ -14,16 +14,205 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      menu_items: {
+        Row: {
+          category_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_available: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          updated_at: string
+          variant_label: string | null
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_available?: boolean
+          name: string
+          price_cents: number
+          sort_order?: number
+          updated_at?: string
+          variant_label?: string | null
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_available?: boolean
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          updated_at?: string
+          variant_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_items: {
+        Row: {
+          created_at: string
+          id: string
+          item_name: string
+          menu_item_id: string | null
+          order_id: string
+          quantity: number
+          unit_price_cents: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_name: string
+          menu_item_id?: string | null
+          order_id: string
+          quantity: number
+          unit_price_cents: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_name?: string
+          menu_item_id?: string | null
+          order_id?: string
+          quantity?: number
+          unit_price_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          created_at: string
+          customer_name: string
+          customer_phone: string
+          delivery_notes: string | null
+          fulfillment: Database["public"]["Enums"]["fulfillment_type"]
+          id: string
+          order_number: string
+          status: Database["public"]["Enums"]["order_status"]
+          subtotal_cents: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name: string
+          customer_phone: string
+          delivery_notes?: string | null
+          fulfillment: Database["public"]["Enums"]["fulfillment_type"]
+          id?: string
+          order_number?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_cents: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          customer_phone?: string
+          delivery_notes?: string | null
+          fulfillment?: Database["public"]["Enums"]["fulfillment_type"]
+          id?: string
+          order_number?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          subtotal_cents?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_staff: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "staff" | "user"
+      fulfillment_type: "pickup" | "delivery"
+      order_status:
+        | "pending"
+        | "preparing"
+        | "out_for_delivery"
+        | "completed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +339,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "staff", "user"],
+      fulfillment_type: ["pickup", "delivery"],
+      order_status: [
+        "pending",
+        "preparing",
+        "out_for_delivery",
+        "completed",
+        "cancelled",
+      ],
+    },
   },
 } as const
