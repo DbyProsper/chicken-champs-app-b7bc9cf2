@@ -7,6 +7,7 @@ import { useBranch } from "@/lib/branch";
 import { activePromotionsQuery } from "@/lib/user-queries";
 import girlsBg from "@/assets/girls-lunch.jpg.asset.json";
 import chickenHero from "@/assets/chicken-hero.jpg.asset.json";
+import chickenChips from "@/assets/chicken-chips.jpg.asset.json";
 import chef from "@/assets/chef.jpg.asset.json";
 import couple from "@/assets/couple.jpg.asset.json";
 import { formatZAR } from "@/lib/format";
@@ -98,7 +99,7 @@ function Home() {
         <div className="grid grid-cols-2 gap-3">
           {[
             { title: "Chicken", desc: "1pc → 21pc bucket", img: chickenHero.url, slug: "chicken" },
-            { title: "Combos", desc: "Chicken + chips", img: chickenChipsSlug(), slug: "combos" },
+            { title: "Combos", desc: "Chicken + chips", img: chickenChips.url, slug: "combos" },
             { title: "Burgers", desc: "Mississippi, Dekka", img: chef.url, slug: "burgers" },
             { title: "Shakes", desc: "Cold & creamy", img: couple.url, slug: "shakes" },
           ].map((c) => (
@@ -165,8 +166,3 @@ function Home() {
   );
 }
 
-// Small helper because we import chicken_2 as chicken-chips
-function chickenChipsSlug() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return new URL("/src/assets/chicken-chips.jpg.asset.json", import.meta.url).toString();
-}
