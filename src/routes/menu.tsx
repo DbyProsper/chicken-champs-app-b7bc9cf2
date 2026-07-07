@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Minus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { menuQuery, type MenuItem } from "@/lib/menu-queries";
@@ -27,6 +27,9 @@ function MenuPage() {
   const { data } = useSuspenseQuery(menuQuery);
   const { categories, items } = data;
   const [active, setActive] = useState(categories[0]?.slug ?? "");
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const sectionsRef = useRef<Record<string, HTMLElement | null>>({});
+  const isClickScrollRef = useRef(false);
 
   const grouped = useMemo(() => {
     const map: Record<string, MenuItem[]> = {};
@@ -38,28 +41,76 @@ function MenuPage() {
     return map;
   }, [categories, items]);
 
+  // Scroll-spy: highlight active category as user scrolls
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (isClickScrollRef.current) return;
+        // pick the entry closest to top that is intersecting
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) {
+          const slug = visible[0].target.getAttribute("data-slug");
+          if (slug) setActive(slug);
+        }
+      },
+      { rootMargin: "-140px 0px -60% 0px", threshold: [0, 0.1, 0.5] },
+    );
+    categories.forEach((c) => {
+      const el = sectionsRef.current[c.slug];
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [categories]);
+
+  // Auto-scroll active tab into view horizontally
+  useEffect(() => {
+    const bar = tabsRef.current;
+    if (!bar) return;
+    const el = bar.querySelector<HTMLElement>(`[data-tab="${active}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [active]);
+
+  function scrollTo(slug: string) {
+    setActive(slug);
+    isClickScrollRef.current = true;
+    const el = sectionsRef.current[slug];
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => { isClickScrollRef.current = false; }, 800);
+  }
+
+  // Deep link from home hash
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (hash && grouped[hash]) {
+      setTimeout(() => scrollTo(hash), 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="min-h-screen pb-24">
       <Header subtitle="Menu" />
 
-      {/* Category tabs */}
-      <div className="sticky top-[68px] z-20 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto max-w-lg overflow-x-auto no-scrollbar">
+      {/* Sticky category tabs — highlights active section on scroll */}
+      <div className="sticky top-[54px] z-20 border-b border-border bg-background/95 backdrop-blur">
+        <div ref={tabsRef} className="mx-auto max-w-lg overflow-x-auto no-scrollbar">
           <div className="flex gap-2 px-4 py-2 min-w-max">
             {categories.map((c) => (
-              <a
+              <button
                 key={c.id}
-                href={`#${c.slug}`}
-                onClick={() => setActive(c.slug)}
+                data-tab={c.slug}
+                onClick={() => scrollTo(c.slug)}
                 className={cn(
-                  "shrink-0 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-colors",
+                  "shrink-0 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all",
                   active === c.slug
-                    ? "bg-brand text-brand-foreground"
+                    ? "bg-brand text-brand-foreground shadow-md scale-105"
                     : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
                 {c.name}
-              </a>
+              </button>
             ))}
           </div>
         </div>
@@ -67,7 +118,13 @@ function MenuPage() {
 
       <div className="mx-auto max-w-lg px-4 py-4 space-y-8">
         {categories.map((c) => (
-          <section key={c.id} id={c.slug} className="scroll-mt-32">
+          <section
+            key={c.id}
+            id={c.slug}
+            data-slug={c.slug}
+            ref={(el) => { sectionsRef.current[c.slug] = el; }}
+            className="scroll-mt-32"
+          >
             <h2 className="font-display text-3xl text-brand mb-3">{c.name}</h2>
             <div className="space-y-2">
               {grouped[c.slug]?.map((it) => <Row key={it.id} item={it} />)}
@@ -87,17 +144,19 @@ function Row({ item }: { item: MenuItem }) {
   const qty = inCart?.quantity ?? 0;
 
   const label = item.variant_label ? `${item.name} — ${item.variant_label}` : item.name;
+  const available = item.is_available;
 
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-3">
+    <div className={cn("flex items-start gap-3 rounded-xl border border-border bg-card p-3", !available && "opacity-50")}>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-3">
           <div className="font-semibold text-sm truncate">{label}</div>
           <div className="font-display text-lg text-brand shrink-0">{formatZAR(item.price_cents)}</div>
         </div>
         {item.description && <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{item.description}</div>}
+        {!available && <div className="mt-0.5 text-[10px] uppercase tracking-wider text-brand font-bold">Sold out</div>}
       </div>
-      {qty === 0 ? (
+      {!available ? null : qty === 0 ? (
         <button
           onClick={() => {
             add({ id: item.id, name: item.name, variant: item.variant_label, unit_price_cents: item.price_cents });

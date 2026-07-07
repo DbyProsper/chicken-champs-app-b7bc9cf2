@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      branches: {
+        Row: {
+          address: string
+          city: string
+          closes_at: string
+          created_at: string
+          id: string
+          is_active: boolean
+          latitude: number | null
+          longitude: number | null
+          name: string
+          opens_at: string
+          phone: string | null
+          postal_code: string
+          slug: string
+          sort_order: number
+          whatsapp: string | null
+        }
+        Insert: {
+          address: string
+          city: string
+          closes_at?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          opens_at?: string
+          phone?: string | null
+          postal_code: string
+          slug: string
+          sort_order?: number
+          whatsapp?: string | null
+        }
+        Update: {
+          address?: string
+          city?: string
+          closes_at?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          opens_at?: string
+          phone?: string | null
+          postal_code?: string
+          slug?: string
+          sort_order?: number
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string
@@ -132,6 +186,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          branch_id: string
           created_at: string
           customer_name: string
           customer_phone: string
@@ -139,11 +194,16 @@ export type Database = {
           fulfillment: Database["public"]["Enums"]["fulfillment_type"]
           id: string
           order_number: string
+          pickup_pin: string
           status: Database["public"]["Enums"]["order_status"]
           subtotal_cents: number
           updated_at: string
+          user_id: string | null
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
+          branch_id: string
           created_at?: string
           customer_name: string
           customer_phone: string
@@ -151,11 +211,16 @@ export type Database = {
           fulfillment: Database["public"]["Enums"]["fulfillment_type"]
           id?: string
           order_number?: string
+          pickup_pin: string
           status?: Database["public"]["Enums"]["order_status"]
           subtotal_cents: number
           updated_at?: string
+          user_id?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
+          branch_id?: string
           created_at?: string
           customer_name?: string
           customer_phone?: string
@@ -163,32 +228,149 @@ export type Database = {
           fulfillment?: Database["public"]["Enums"]["fulfillment_type"]
           id?: string
           order_number?: string
+          pickup_pin?: string
           status?: Database["public"]["Enums"]["order_status"]
           subtotal_cents?: number
           updated_at?: string
+          user_id?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          favorite_branch_id: string | null
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          favorite_branch_id?: string | null
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          favorite_branch_id?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_favorite_branch_id_fkey"
+            columns: ["favorite_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotions: {
+        Row: {
+          active_from: string | null
+          active_until: string | null
+          badge: string | null
+          branch_id: string | null
+          created_at: string
+          day_of_week: number | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          price_cents: number | null
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active_from?: string | null
+          active_until?: string | null
+          badge?: string | null
+          branch_id?: string | null
+          created_at?: string
+          day_of_week?: number | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          price_cents?: number | null
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active_from?: string | null
+          active_until?: string | null
+          badge?: string | null
+          branch_id?: string | null
+          created_at?: string
+          day_of_week?: number | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          price_cents?: number | null
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
+          branch_id: string | null
           created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
+          branch_id?: string | null
           created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
+          branch_id?: string | null
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

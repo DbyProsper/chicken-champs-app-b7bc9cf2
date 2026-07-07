@@ -79,3 +79,8 @@
   background-image: radial-gradient(oklch(1 0 0 / 0.04) 1px, transparent 1px);
   background-size: 6px 6px;
 }
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

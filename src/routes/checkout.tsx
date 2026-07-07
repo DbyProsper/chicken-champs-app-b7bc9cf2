@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Header } from "@/components/Header";
 import { useCart } from "@/lib/cart";
+import { useBranch } from "@/lib/branch";
 import { formatZAR } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { MapPin } from "lucide-react";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -28,6 +30,8 @@ const schema = z.object({
 function Checkout() {
   const nav = useNavigate();
   const { items, subtotalCents, clear } = useCart();
+  const { active: branch } = useBranch();
+  const [userId, setUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     customer_name: "",
@@ -35,6 +39,29 @@ function Checkout() {
     fulfillment: "pickup" as "pickup" | "delivery",
     delivery_notes: "",
   });
+
+  useEffect(() => {
+    (async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (u.user) {
+        setUserId(u.user.id);
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, phone")
+          .eq("id", u.user.id)
+          .maybeSingle();
+        if (profile) {
+          setForm((f) => ({
+            ...f,
+            customer_name: f.customer_name || profile.full_name || "",
+            customer_phone: f.customer_phone || profile.phone || "",
+          }));
+        } else if (u.user.email) {
+          setForm((f) => ({ ...f, customer_name: f.customer_name || (u.user!.user_metadata as any)?.full_name || "" }));
+        }
+      }
+    })();
+  }, []);
 
   if (items.length === 0 && !submitting) {
     return (
@@ -50,6 +77,10 @@ function Checkout() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!branch) {
+      toast.error("Please choose a branch first");
+      return;
+    }
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
@@ -65,7 +96,9 @@ function Checkout() {
           fulfillment: parsed.data.fulfillment,
           delivery_notes: parsed.data.delivery_notes || null,
           subtotal_cents: subtotalCents,
-        })
+          branch_id: branch.id,
+          user_id: userId,
+        } as never)
         .select("id, order_number")
         .single();
       if (oErr) throw oErr;
@@ -81,7 +114,6 @@ function Checkout() {
       );
       if (iErr) throw iErr;
 
-      // Remember for track page
       try {
         const list = JSON.parse(localStorage.getItem("champs-orders") || "[]");
         list.unshift(orderRow.order_number);
@@ -100,6 +132,12 @@ function Checkout() {
     <div className="min-h-screen pb-10">
       <Header subtitle="Checkout" />
       <form onSubmit={submit} className="mx-auto max-w-lg px-4 py-4 space-y-5">
+        {branch && (
+          <div className="rounded-xl bg-brand/5 border border-brand/20 px-4 py-3 text-xs flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-brand" />
+            <span>Ordering from <span className="font-bold">{branch.name}</span> · {branch.address}, {branch.city}</span>
+          </div>
+        )}
         <section>
           <h2 className="font-display text-xl mb-2">Your details</h2>
           <div className="space-y-3">
@@ -119,6 +157,11 @@ function Checkout() {
               onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
               required
             />
+            {!userId && (
+              <p className="text-[11px] text-muted-foreground">
+                <Link to="/auth" className="underline text-brand font-semibold">Sign in</Link> to save this order to your history and unlock reordering.
+              </p>
+            )}
           </div>
         </section>
 
@@ -170,7 +213,7 @@ function Checkout() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !branch}
           className="w-full rounded-full bg-brand py-4 text-sm font-bold text-brand-foreground hover:bg-brand-dark disabled:opacity-60"
         >
           {submitting ? "Placing order…" : `Place order · ${formatZAR(subtotalCents)}`}
