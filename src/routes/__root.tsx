@@ -13,6 +13,7 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CartProvider } from "@/lib/cart";
+import { BranchProvider } from "@/lib/branch";
 import { supabase } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
@@ -53,11 +54,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
       { name: "theme-color", content: "#E21B23" },
-      { title: "Champs Chicken — Order Online | Dikeni" },
-      { name: "description", content: "Order Champs Chicken online for pickup or delivery in Dikeni. Fresh fried chicken, chips, burgers, combos and shakes since 1995." },
+      { title: "Champs Chicken — Order Online | Dikeni & Fort Beaufort" },
+      { name: "description", content: "Order Champs Chicken online for pickup or delivery in Dikeni & Fort Beaufort. Fresh fried chicken, chips, burgers, combos and shakes since 1995." },
       { name: "author", content: "Champs Chicken" },
       { property: "og:title", content: "Champs Chicken — Order Online" },
-      { property: "og:description", content: "Fresh fried chicken, chips & combos. Order online in Dikeni." },
+      { property: "og:description", content: "Fresh fried chicken, chips & combos. Order online in Dikeni & Fort Beaufort." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -98,10 +99,12 @@ function RootComponent() {
   }, [queryClient, router]);
   return (
     <QueryClientProvider client={queryClient}>
-      <CartProvider>
-        <Outlet />
-        <Toaster richColors position="top-center" />
-      </CartProvider>
+      <BranchProvider>
+        <CartProvider>
+          <Outlet />
+          <Toaster richColors position="top-center" />
+        </CartProvider>
+      </BranchProvider>
     </QueryClientProvider>
   );
 }

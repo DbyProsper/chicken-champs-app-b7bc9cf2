@@ -1,10 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, MessageCircle, Bell, ShieldCheck } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Header } from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
+import { fireNotification, notificationPermission, requestNotificationPermission } from "@/lib/notifications";
+import { waLink, orderStatusMessage } from "@/lib/whatsapp";
+import { toast } from "sonner";
 
 const orderQuery = (number: string) =>
   queryOptions({
@@ -12,16 +16,18 @@ const orderQuery = (number: string) =>
     queryFn: async () => {
       const { data: order, error } = await supabase
         .from("orders")
-        .select("id, order_number, customer_name, customer_phone, fulfillment, delivery_notes, subtotal_cents, status, created_at")
+        .select("id, order_number, customer_name, customer_phone, fulfillment, delivery_notes, subtotal_cents, status, created_at, pickup_pin, branch_id, verified_at")
         .eq("order_number", number)
         .maybeSingle();
       if (error) throw error;
       if (!order) return null;
-      const { data: itemsData } = await supabase
-        .from("order_items")
-        .select("item_name, unit_price_cents, quantity")
-        .eq("order_id", order.id);
-      return { order, items: itemsData ?? [] };
+      const [{ data: itemsData }, { data: branch }] = await Promise.all([
+        supabase.from("order_items").select("item_name, unit_price_cents, quantity").eq("order_id", order.id),
+        order.branch_id
+          ? supabase.from("branches").select("name, address, city, phone").eq("id", order.branch_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      return { order, items: itemsData ?? [], branch };
     },
     staleTime: 5_000,
   });
@@ -47,26 +53,55 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+const STATUS_STEPS = ["pending", "preparing", "out_for_delivery", "completed"] as const;
+
 function OrderPage() {
   const { number } = Route.useParams();
   const { data, refetch } = useSuspenseQuery(orderQuery(number));
+  const prevStatus = useRef<string | null>(null);
+  const [permission, setPermission] = useState(notificationPermission());
 
-  // Realtime subscription for this order
+  // Realtime subscription for this order → refetch + browser notification on status change
   useEffect(() => {
     if (!data?.order.id) return;
+    prevStatus.current = data.order.status;
     const ch = supabase
       .channel(`order-${data.order.id}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${data.order.id}` }, () => refetch())
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${data.order.id}` },
+        (payload) => {
+          const newStatus = (payload.new as any).status as string;
+          if (prevStatus.current && newStatus !== prevStatus.current) {
+            const label = STATUS_LABEL[newStatus] ?? newStatus;
+            toast.success(`Order update: ${label}`);
+            fireNotification(
+              `Champs Chicken — ${label}`,
+              `Order ${data.order.order_number} · ${label}`,
+              `order-${data.order.id}`,
+            );
+            prevStatus.current = newStatus;
+          }
+          refetch();
+        },
+      )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [data?.order.id, refetch]);
+  }, [data?.order.id, data?.order.order_number, refetch]);
+
+  async function enableNotifications() {
+    const p = await requestNotificationPermission();
+    setPermission(p);
+    if (p === "granted") toast.success("Notifications enabled");
+    else if (p === "denied") toast.error("Notifications blocked in browser settings");
+  }
 
   if (!data) return <div className="p-6 text-sm">Order not found.</div>;
-  const { order, items } = data;
+  const { order, items, branch } = data;
+  const currentIdx = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
 
-  const waText = encodeURIComponent(
-    `Hi Champs Chicken! I just placed order ${order.order_number} for ${order.customer_name} (${order.customer_phone}) — ${order.fulfillment}. Total ${formatZAR(order.subtotal_cents)}.`,
-  );
+  const waText = orderStatusMessage(order.order_number, order.status, order.customer_name);
+  const verifyPayload = `champs:${order.order_number}:${order.pickup_pin}`;
 
   return (
     <div className="min-h-screen pb-10">
@@ -81,11 +116,64 @@ function OrderPage() {
           </div>
         </div>
 
+        {/* Progress bar */}
+        {order.status !== "cancelled" && (
+          <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-center justify-between">
+              {STATUS_STEPS.map((s, i) => (
+                <div key={s} className="flex-1 flex items-center">
+                  <div className={`h-8 w-8 rounded-full grid place-items-center text-[10px] font-bold ${i <= currentIdx ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>
+                    {i + 1}
+                  </div>
+                  {i < STATUS_STEPS.length - 1 && (
+                    <div className={`flex-1 h-1 mx-1 rounded ${i < currentIdx ? "bg-brand" : "bg-muted"}`} />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-4 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-center">
+              <span>Received</span><span>Prep</span><span>{order.fulfillment === "delivery" ? "Delivery" : "Ready"}</span><span>Done</span>
+            </div>
+          </div>
+        )}
+
+        {/* PIN + QR verification card */}
+        <div className="mt-4 rounded-2xl border-2 border-brand/40 bg-brand/5 p-5">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand">
+            <ShieldCheck className="h-4 w-4" /> Show this on {order.fulfillment === "delivery" ? "delivery" : "collection"}
+          </div>
+          <div className="mt-3 flex items-center gap-4">
+            <div className="flex-1">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Pickup PIN</div>
+              <div className="font-display text-5xl text-brand tracking-[0.3em]">{order.pickup_pin}</div>
+              <p className="mt-2 text-xs text-muted-foreground">Give this 4-digit PIN to the driver or cashier to confirm your order.</p>
+            </div>
+            <div className="shrink-0 rounded-xl bg-white p-2 border border-border">
+              <QRCodeSVG value={verifyPayload} size={96} />
+            </div>
+          </div>
+          {order.verified_at && (
+            <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-green-600 px-3 py-1 text-[10px] font-bold text-white uppercase tracking-wider">
+              <CheckCircle2 className="h-3 w-3" /> Verified
+            </div>
+          )}
+        </div>
+
+        {/* Notifications */}
+        {permission === "default" && (
+          <button
+            onClick={enableNotifications}
+            className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-brand/40 bg-card py-3 text-sm font-semibold text-brand hover:bg-brand/5"
+          >
+            <Bell className="h-4 w-4" /> Enable notifications for order updates
+          </button>
+        )}
+
         <a
-          href={`https://wa.me/?text=${waText}`}
+          href={waLink(branch?.phone, waText)}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 flex items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-bold text-white hover:opacity-90"
+          className="mt-3 flex items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-bold text-white hover:opacity-90"
         >
           <MessageCircle className="h-4 w-4" /> Send confirmation on WhatsApp
         </a>
@@ -101,6 +189,13 @@ function OrderPage() {
             <div className="font-semibold capitalize">{order.fulfillment}</div>
             {order.delivery_notes && <div className="text-muted-foreground text-xs mt-1">{order.delivery_notes}</div>}
           </div>
+          {branch && (
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Branch</div>
+              <div className="font-semibold">{branch.name}</div>
+              <div className="text-muted-foreground text-xs">{branch.address}, {branch.city}</div>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 rounded-xl border border-border bg-card p-4 text-sm space-y-1.5">
@@ -116,10 +211,7 @@ function OrderPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Pay on collection at 166 Garden St, Dikeni.
-        </p>
-        <Link to="/menu" className="mt-4 block text-center text-sm font-bold text-brand">
+        <Link to="/menu" className="mt-6 block text-center text-sm font-bold text-brand">
           ← Back to menu
         </Link>
       </div>

@@ -1,17 +1,29 @@
 import { Link } from "@tanstack/react-router";
+import { User } from "lucide-react";
 import logo from "@/assets/champs-logo.jpeg.asset.json";
+import { BranchSwitcher } from "@/components/BranchSwitcher";
 
 export function Header({ subtitle }: { subtitle?: string }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
-      <div className="mx-auto flex max-w-lg items-center gap-3 px-4 py-3">
-        <Link to="/" className="flex items-center gap-3">
-          <img src={logo.url} alt="Champs Chicken" className="h-10 w-auto" />
-          <div className="leading-tight">
-            <div className="font-display text-lg text-brand">Champs Chicken</div>
-            {subtitle && <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{subtitle}</div>}
+      <div className="mx-auto flex max-w-lg items-center gap-2 px-4 py-2.5">
+        <Link to="/" className="flex items-center gap-2.5 min-w-0">
+          <img src={logo.url} alt="Champs Chicken" className="h-9 w-auto" />
+          <div className="leading-tight min-w-0">
+            <div className="font-display text-base text-brand truncate">Champs Chicken</div>
+            {subtitle && <div className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">{subtitle}</div>}
           </div>
         </Link>
+        <div className="ml-auto flex items-center gap-1.5">
+          <BranchSwitcher />
+          <Link
+            to="/auth"
+            aria-label="Account"
+            className="grid h-8 w-8 place-items-center rounded-full border border-border bg-card hover:border-brand"
+          >
+            <User className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
     </header>
   );
