@@ -28,28 +28,31 @@ export const Route = createFileRoute("/")({
 function Home() {
   const { active } = useBranch();
   const { data: promos = [] } = useQuery(activePromotionsQuery);
+  const headline = useTypewriter(["Crispy. Bold.", "Champs Chicken."], { typeMs: 65, holdMs: 1600, eraseMs: 35 });
 
   return (
     <div className="min-h-screen pb-24">
       <Header subtitle={active ? active.city + " · Since 1995" : "Since 1995"} />
 
-      {/* Hero with girls-lunch photo blended into brand dark */}
-      <section className="relative overflow-hidden text-white">
+      {/* Hero with girls-lunch photo blended into brand dark. Mobile-first sizing + focal point that keeps faces in frame. */}
+      <section className="relative overflow-hidden text-white min-h-[68vh] sm:min-h-[520px] flex">
         <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${girlsBg.url})` }}
+          className="absolute inset-0 bg-cover"
+          style={{ backgroundImage: `url(${girlsBg.url})`, backgroundPosition: "50% 30%" }}
           aria-hidden
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1a0708]/95 via-[#2b0a0c]/85 to-brand/70 mix-blend-multiply" aria-hidden />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,transparent_20%,rgba(0,0,0,0.85)_80%)]" aria-hidden />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1a0708]/95 via-[#2b0a0c]/80 to-brand/60 mix-blend-multiply" aria-hidden />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,transparent_20%,rgba(0,0,0,0.75)_85%)]" aria-hidden />
 
-        <div className="relative mx-auto max-w-lg px-5 py-14">
+        <div className="relative mx-auto flex w-full max-w-lg flex-col justify-end px-5 py-12 sm:py-16">
           <div className="flex items-center gap-2 text-white/90 text-[11px] font-bold uppercase tracking-widest">
             <Flame className="h-3.5 w-3.5 text-brand" /> Now taking online orders
           </div>
-          <h1 className="mt-3 font-display text-6xl leading-[0.9] drop-shadow-lg">
-            Crispy. Bold.<br />
-            <span className="text-brand">Champs Chicken.</span>
+          <h1 className="mt-3 font-display text-5xl sm:text-6xl leading-[0.9] drop-shadow-lg min-h-[3.2em] sm:min-h-[2.6em]">
+            {headline.line1}
+            {headline.showBreak && <br />}
+            <span className="text-brand">{headline.line2}</span>
+            <span className="ml-0.5 inline-block w-[0.08em] h-[0.9em] align-baseline bg-white/80 animate-pulse" aria-hidden />
           </h1>
           <p className="mt-4 text-sm text-white/85 max-w-xs">
             Freshly fried chicken, loaded chips and legendary combos. Order for pickup or delivery in {active?.city ?? "your town"}.
