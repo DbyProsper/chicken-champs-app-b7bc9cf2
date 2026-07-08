@@ -20,9 +20,19 @@ export const Route = createFileRoute("/checkout")({
   component: Checkout,
 });
 
+// SA mobile numbers: accept 0XXXXXXXXX (10 digits starting 0) or +27XXXXXXXXX / 27XXXXXXXXX (11 digits, second digit 6/7/8 for mobile ranges but also allow 1-8 to include landlines).
+// Normalise by stripping spaces, dashes, parentheses first.
+const saPhoneRegex = /^(?:\+?27|0)[1-8]\d{8}$/;
+
 const schema = z.object({
   customer_name: z.string().trim().min(1, "Please enter your name").max(100),
-  customer_phone: z.string().trim().min(5, "Enter a valid phone number").max(20),
+  customer_phone: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/[\s\-()]/g, ""))
+    .refine((v) => saPhoneRegex.test(v), {
+      message: "Enter a valid SA number, e.g. 082 123 4567 or +27 82 123 4567",
+    }),
   fulfillment: z.enum(["pickup", "delivery"]),
   delivery_notes: z.string().max(500).optional(),
 });
@@ -150,9 +160,11 @@ function Checkout() {
             />
             <input
               className="w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-              placeholder="Phone number"
+              placeholder="Phone (e.g. 082 123 4567)"
               type="tel"
               inputMode="tel"
+              autoComplete="tel"
+              pattern="[0-9+\s\-()]{10,15}"
               value={form.customer_phone}
               onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
               required
