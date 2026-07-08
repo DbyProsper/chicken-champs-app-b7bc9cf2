@@ -173,7 +173,7 @@ function Home() {
 type TypeState = { line1: string; showBreak: boolean; line2: string };
 
 function useTypewriter(
-  lines: [string, string],
+  lines: string[],
   opts: { typeMs?: number; holdMs?: number; eraseMs?: number } = {},
 ): TypeState {
   const { typeMs = 60, holdMs = 1500, eraseMs = 30 } = opts;
