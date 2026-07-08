@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Plus, Minus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { menuQuery, type MenuItem } from "@/lib/menu-queries";
@@ -23,6 +23,9 @@ export const Route = createFileRoute("/menu")({
   component: MenuPage,
 });
 
+// Combined sticky offset: main Header (~56px) + tab bar (~46px) + small buffer
+const SCROLL_OFFSET = 112;
+
 function MenuPage() {
   const { data } = useSuspenseQuery(menuQuery);
   const { categories, items } = data;
@@ -41,27 +44,28 @@ function MenuPage() {
     return map;
   }, [categories, items]);
 
-  // Scroll-spy: highlight active category as user scrolls
+  // Scroll-spy: pick the section whose top is closest to (but not past) the sticky-header line.
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (isClickScrollRef.current) return;
-        // pick the entry closest to top that is intersecting
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) {
-          const slug = visible[0].target.getAttribute("data-slug");
-          if (slug) setActive(slug);
-        }
-      },
-      { rootMargin: "-140px 0px -60% 0px", threshold: [0, 0.1, 0.5] },
-    );
-    categories.forEach((c) => {
-      const el = sectionsRef.current[c.slug];
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
+    function onScroll() {
+      if (isClickScrollRef.current) return;
+      const threshold = SCROLL_OFFSET + 8;
+      let current = categories[0]?.slug ?? "";
+      for (const c of categories) {
+        const el = sectionsRef.current[c.slug];
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top;
+        if (top - threshold <= 0) current = c.slug;
+        else break;
+      }
+      setActive((prev) => (prev === current ? prev : current));
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, [categories]);
 
   // Auto-scroll active tab into view horizontally
@@ -72,19 +76,21 @@ function MenuPage() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [active]);
 
-  function scrollTo(slug: string) {
+  const scrollTo = useCallback((slug: string) => {
+    const el = sectionsRef.current[slug];
+    if (!el) return;
     setActive(slug);
     isClickScrollRef.current = true;
-    const el = sectionsRef.current[slug];
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => { isClickScrollRef.current = false; }, 800);
-  }
+    const top = el.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET;
+    window.scrollTo({ top, behavior: "smooth" });
+    window.setTimeout(() => { isClickScrollRef.current = false; }, 900);
+  }, []);
 
   // Deep link from home hash
   useEffect(() => {
     const hash = window.location.hash.replace("#", "");
     if (hash && grouped[hash]) {
-      setTimeout(() => scrollTo(hash), 100);
+      setTimeout(() => scrollTo(hash), 150);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
