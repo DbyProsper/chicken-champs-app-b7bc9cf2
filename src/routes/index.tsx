@@ -170,3 +170,62 @@ function Home() {
   );
 }
 
+type TypeState = { line1: string; showBreak: boolean; line2: string };
+
+function useTypewriter(
+  lines: [string, string],
+  opts: { typeMs?: number; holdMs?: number; eraseMs?: number } = {},
+): TypeState {
+  const { typeMs = 60, holdMs = 1500, eraseMs = 30 } = opts;
+  const [state, setState] = useState<TypeState>({ line1: "", showBreak: false, line2: "" });
+
+  useEffect(() => {
+    let cancelled = false;
+    const [a, b] = lines;
+
+    async function run() {
+      while (!cancelled) {
+        // type line 1
+        for (let i = 1; i <= a.length; i++) {
+          if (cancelled) return;
+          setState({ line1: a.slice(0, i), showBreak: false, line2: "" });
+          await wait(typeMs);
+        }
+        if (cancelled) return;
+        setState((s) => ({ ...s, showBreak: true }));
+        // type line 2
+        for (let i = 1; i <= b.length; i++) {
+          if (cancelled) return;
+          setState({ line1: a, showBreak: true, line2: b.slice(0, i) });
+          await wait(typeMs);
+        }
+        await wait(holdMs);
+        // erase line 2
+        for (let i = b.length; i >= 0; i--) {
+          if (cancelled) return;
+          setState({ line1: a, showBreak: true, line2: b.slice(0, i) });
+          await wait(eraseMs);
+        }
+        if (cancelled) return;
+        setState({ line1: a, showBreak: false, line2: "" });
+        // erase line 1
+        for (let i = a.length; i >= 0; i--) {
+          if (cancelled) return;
+          setState({ line1: a.slice(0, i), showBreak: false, line2: "" });
+          await wait(eraseMs);
+        }
+      }
+    }
+    run();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return state;
+}
+
+function wait(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+
