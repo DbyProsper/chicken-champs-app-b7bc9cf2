@@ -160,9 +160,11 @@ function Checkout() {
             />
             <input
               className="w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-              placeholder="Phone number"
+              placeholder="Phone (e.g. 082 123 4567)"
               type="tel"
               inputMode="tel"
+              autoComplete="tel"
+              pattern="[0-9+\s\-()]{10,15}"
               value={form.customer_phone}
               onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
               required
