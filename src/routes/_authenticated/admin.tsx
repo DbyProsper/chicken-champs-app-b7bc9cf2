@@ -185,14 +185,15 @@ function Admin() {
             <ShieldCheck className="h-5 w-5" /> Champs Admin
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/admin/promotions" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            {/* Small-screen quick links (hidden on large screens where sidebar appears) */}
+            <Link to="/_authenticated/admin/promotions" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Sparkles className="h-3.5 w-3.5" /> Promos
             </Link>
-            <Link to="/admin/appearance" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
-              <Paintbrush className="h-3.5 w-3.5" /> Appearance
-            </Link>
-            <Link to="/admin/menu" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/_authenticated/admin/menu" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Utensils className="h-3.5 w-3.5" /> Menu
+            </Link>
+            <Link to="/_authenticated/admin/appearance" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+              <Paintbrush className="h-3.5 w-3.5" /> Appearance
             </Link>
             <button onClick={load} className="grid h-8 w-8 place-items-center rounded-full border hover:bg-accent"><RefreshCw className="h-4 w-4" /></button>
             <button onClick={signOut} className="grid h-8 w-8 place-items-center rounded-full border hover:bg-accent"><LogOut className="h-4 w-4" /></button>
@@ -201,31 +202,47 @@ function Admin() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-4">
-        {role === "admin" && (
-          <form onSubmit={grantAccess} className="mb-4 rounded-2xl border bg-card p-3">
-            <div className="mb-2 flex items-center gap-2 text-sm font-bold">
-              <UserPlus className="h-4 w-4 text-brand" /> Grant staff/admin access
+        <div className="lg:flex lg:items-start lg:gap-6">
+          <aside className="hidden lg:block w-56 shrink-0">
+            <div className="rounded-2xl border bg-card p-3 sticky top-[68px]">
+              <nav className="space-y-2">
+                <Link to="/_authenticated/admin" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
+                  <ShieldCheck className="h-4 w-4" /> Orders
+                </Link>
+                <Link to="/_authenticated/admin/menu" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
+                  <Utensils className="h-4 w-4" /> Menu
+                </Link>
+                <Link to="/_authenticated/admin/promotions" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
+                  <Sparkles className="h-4 w-4" /> Promotions
+                </Link>
+                <Link to="/_authenticated/admin/appearance" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
+                  <Paintbrush className="h-4 w-4" /> Appearance
+                </Link>
+              </nav>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="email"
-                value={grantEmail}
-                onChange={(event) => setGrantEmail(event.target.value)}
-                placeholder="staff@example.com"
-                className="min-w-52 flex-1 rounded-md border px-3 py-2 text-sm"
-              />
-              <select value={grantRole} onChange={(event) => setGrantRole(event.target.value as "admin" | "staff")} className="rounded-md border px-3 py-2 text-sm">
-                <option value="admin">Admin</option>
-                <option value="staff">Staff</option>
-              </select>
-              <button disabled={grantBusy} className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-brand-foreground disabled:opacity-60">
-                {grantBusy ? "Granting…" : "Grant access"}
-              </button>
-            </div>
-          </form>
-        )}
+          </aside>
 
-        {/* Branch filter */}
+          <main className="flex-1">
+                      {role === "admin" && (
+                        <form onSubmit={grantAccess} className="mb-4 flex gap-2">
+                          <input
+                            type="email"
+                            value={grantEmail}
+                            onChange={(event) => setGrantEmail(event.target.value)}
+                            placeholder="staff@example.com"
+                            className="min-w-52 flex-1 rounded-md border px-3 py-2 text-sm"
+                          />
+                          <select value={grantRole} onChange={(event) => setGrantRole(event.target.value as "admin" | "staff")} className="rounded-md border px-3 py-2 text-sm">
+                            <option value="admin">Admin</option>
+                            <option value="staff">Staff</option>
+                          </select>
+                          <button disabled={grantBusy} className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-brand-foreground disabled:opacity-60">
+                            {grantBusy ? "Granting…" : "Grant access"}
+                          </button>
+                        </form>
+                      )}
+
+                      {/* Branch filter */}
         <div className="mb-3 flex flex-wrap gap-2 items-center">
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">Branch</span>
           <button
@@ -283,6 +300,8 @@ function Admin() {
               />
             );
           })}
+        </div>
+          </main>
         </div>
       </div>
     </div>

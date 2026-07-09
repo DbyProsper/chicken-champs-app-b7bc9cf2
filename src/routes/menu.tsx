@@ -10,12 +10,13 @@ import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getMenuImageForItem } from "@/lib/menu-images";
+import { getMenuIconForItem, getCategoryIcon } from "@/lib/menu-icons";
 
 export const Route = createFileRoute("/menu")({
   head: () => ({
     meta: [
       { title: "Menu — Champs Chicken" },
-      { name: "description", content: "Full Champs Chicken menu: fried chicken, chips, sauces, burgers, fish, combos, desserts and shakes." },
+      { name: "description", content: "Full Champs Chicken menu: fried chicken, chips, sauces, burgers, fish, combos, desserts, shakes and drinks." },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(menuQuery),
@@ -30,20 +31,72 @@ const SCROLL_OFFSET = 112;
 function MenuPage() {
   const { data } = useSuspenseQuery(menuQuery);
   const { categories, items } = data;
-  const [active, setActive] = useState(categories[0]?.slug ?? "");
+  const displayCategories = useMemo(() => {
+    const hasSalads = categories.some((c) => c.slug === "salads" || c.name.toLowerCase().includes("salad"));
+    const hasDrinks = categories.some((c) => c.slug === "drinks" || c.name.toLowerCase().includes("drink"));
+
+    let nextCategories = categories;
+    const saladsCategory = { id: "salads-section", name: "Salads", slug: "salads" } as const;
+    if (!hasSalads) {
+      const chipsIndex = nextCategories.findIndex((c) => c.slug === "chips" || c.name.toLowerCase().includes("chips"));
+      nextCategories = chipsIndex === -1
+        ? [...nextCategories, saladsCategory]
+        : [...nextCategories.slice(0, chipsIndex + 1), saladsCategory, ...nextCategories.slice(chipsIndex + 1)];
+    }
+
+    if (hasDrinks) return nextCategories;
+
+    const drinksCategory = { id: "drinks-section", name: "Drinks", slug: "drinks" } as const;
+    const insertAfter = nextCategories.reduce((lastIndex, c, index) => {
+      return /(shake|frostee|sundae|dessert)/.test(c.slug) || /(shake|frostee|sundae|dessert)/.test(c.name.toLowerCase())
+        ? index
+        : lastIndex;
+    }, -1);
+
+    if (insertAfter === -1) return [...nextCategories, drinksCategory];
+    return [...nextCategories.slice(0, insertAfter + 1), drinksCategory, ...nextCategories.slice(insertAfter + 1)];
+  }, [categories]);
+
+  const [active, setActive] = useState(displayCategories[0]?.slug ?? "");
   const tabsRef = useRef<HTMLDivElement>(null);
   const sectionsRef = useRef<Record<string, HTMLElement | null>>({});
   const isClickScrollRef = useRef(false);
 
   const grouped = useMemo(() => {
     const map: Record<string, MenuItem[]> = {};
-    for (const c of categories) map[c.slug] = [];
+    for (const c of displayCategories) map[c.slug] = [];
+    const drinkCategory = displayCategories.find((c) => c.slug === "drinks" || c.name.toLowerCase().includes("drink"));
+    const drinkMatcher = /\b(?:pepsi|coke|mountain dew|powerade|spar letta|spar)\b/i;
+
     for (const it of items) {
+      const combinedName = `${it.name} ${it.variant_label ?? ""}`;
+
+      // Place Fish Burger explicitly into the Burgers section when present
+      const burgerCategory = displayCategories.find((c) => /burger/.test(c.slug) || /burger/.test(c.name.toLowerCase()));
+      if (/fish\s*burger/i.test(it.name) && burgerCategory) {
+        if (!map[burgerCategory.slug]) map[burgerCategory.slug] = [];
+        map[burgerCategory.slug].push(it);
+        continue;
+      }
+
+      // Place drink items into the Drinks section
+      if (drinkMatcher.test(combinedName) && drinkCategory) {
+        if (!map[drinkCategory.slug]) map[drinkCategory.slug] = [];
+        map[drinkCategory.slug].push(it);
+        continue;
+      }
+
+      // Place all items whose name contains "salad" into the Salads section
+      if (/salad/i.test(it.name)) {
+        if (!map["salads"]) map["salads"] = [];
+        map["salads"].push(it);
+        continue;
+      }
       const cat = categories.find((c) => c.id === it.category_id);
-      if (cat) map[cat.slug].push(it);
+      if (cat && map[cat.slug]) map[cat.slug].push(it);
     }
     return map;
-  }, [categories, items]);
+  }, [displayCategories, categories, items]);
 
   // Scroll-spy: pick the section whose top is closest to (but not past) the sticky-header line.
   useEffect(() => {
@@ -51,7 +104,7 @@ function MenuPage() {
       if (isClickScrollRef.current) return;
       const threshold = SCROLL_OFFSET + 8;
       let current = categories[0]?.slug ?? "";
-      for (const c of categories) {
+      for (const c of displayCategories) {
         const el = sectionsRef.current[c.slug];
         if (!el) continue;
         const top = el.getBoundingClientRect().top;
@@ -104,18 +157,19 @@ function MenuPage() {
       <div className="sticky top-[54px] z-20 border-b border-border bg-background/95 backdrop-blur">
         <div ref={tabsRef} className="mx-auto max-w-lg overflow-x-auto no-scrollbar">
           <div className="flex gap-2 px-4 py-2 min-w-max">
-            {categories.map((c) => (
+              {displayCategories.map((c) => (
               <button
                 key={c.id}
                 data-tab={c.slug}
                 onClick={() => scrollTo(c.slug)}
                 className={cn(
-                  "shrink-0 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all",
+                  "group shrink-0 rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition-all",
                   active === c.slug
                     ? "bg-brand text-brand-foreground shadow-md scale-105"
                     : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
+                <span aria-hidden className="mr-2 inline-block">{getCategoryIcon(c.slug || c.name)}</span>
                 {c.name}
               </button>
             ))}
@@ -124,7 +178,7 @@ function MenuPage() {
       </div>
 
       <div className="mx-auto max-w-lg px-4 py-4 space-y-8">
-        {categories.map((c) => (
+        {displayCategories.map((c) => (
           <section
             key={c.id}
             id={c.slug}
@@ -134,7 +188,7 @@ function MenuPage() {
           >
             <h2 className="font-display text-3xl text-brand mb-3">{c.name}</h2>
             <div className="space-y-2">
-              {grouped[c.slug]?.map((it) => <Row key={it.id} item={it} />)}
+                {grouped[c.slug]?.map((it) => <Row key={it.id} item={it} />)}
             </div>
           </section>
         ))}
@@ -153,6 +207,7 @@ function Row({ item }: { item: MenuItem }) {
   const label = item.variant_label ? `${item.name} — ${item.variant_label}` : item.name;
   const available = item.is_available;
   const image = getMenuImageForItem(item.name, item.variant_label);
+  const description = getMenuDescription(item.name, item.variant_label, item.description);
 
   return (
     <div className={cn("flex items-start gap-3 rounded-xl border border-border bg-card p-3", !available && "opacity-50")}>
@@ -164,7 +219,12 @@ function Row({ item }: { item: MenuItem }) {
           <div className="font-semibold text-sm truncate">{label}</div>
           <div className="font-display text-lg text-brand shrink-0">{formatZAR(item.price_cents)}</div>
         </div>
-        {item.description && <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{item.description}</div>}
+        {description && (
+          <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+            <span aria-hidden className="mr-0 inline-block">{getMenuIconForItem(item.name, item.variant_label)}</span>
+            {description}
+          </div>
+        )}
         {!available && <div className="mt-0.5 text-[10px] uppercase tracking-wider text-brand font-bold">Sold out</div>}
       </div>
       {!available ? null : qty === 0 ? (
@@ -190,4 +250,53 @@ function Row({ item }: { item: MenuItem }) {
       )}
     </div>
   );
+}
+
+function getMenuDescription(name: string, variant: string | null, description: string | null) {
+  const lower = `${name} ${variant ?? ""}`.toLowerCase();
+
+  if (/fish burger/.test(lower)) {
+    return `Fish patty, lettuce and special Champs sauce in a toasted bun.`;
+  }
+  if (/\b(?:1|2|3|4|5)\s*piece\b/.test(lower) && /chicken/.test(lower)) {
+    return `Crispy fried chicken made with Champs signature seasoning.`;
+  }
+  if (/\b(?:9|21)\s*piece\b/.test(lower) && /chicken/.test(lower)) {
+    return `A larger chicken portion, crispy on the outside and juicy inside.`;
+  }
+  if (/\b1\s*piece\s*fish\b/.test(lower)) {
+    return `Lightly battered fish served with crisp chips.`;
+  }
+  if (/fish\s*(?:&|and)\s*chips/.test(lower)) {
+    return `Crispy fish served with chips.`;
+  }
+  if (/combo|bucket|meal/.test(lower)) {
+    return `Crispy chicken and golden chips paired together for a perfect meal.`;
+  }
+  if (/shake|frostee|milkshake|smoothie/.test(lower)) {
+    if (/frostee(?:.*choc|.*chocolate)|choc.*frostee/.test(lower)) {
+      return `Creamy chocolate shake made with rich flavouring and ice-cold milk.`;
+    }
+    return `Creamy shake made with rich flavouring and ice-cold milk.`;
+  }
+  if (/sauce|dip/.test(lower)) {
+    return `Perfect sauce for dipping and boosting every bite.`;
+  }
+  if (/\b(?:pepsi|coke|mountain dew|powerade|spar letta|spar)\b/.test(lower)) {
+    return `Chilled soft drink to pair with your meal.`;
+  }
+  if (/salad/.test(lower)) {
+    return `Fresh salad with crisp greens and house-made dressing.`;
+  }
+  if (/chips|fries/.test(lower)) {
+    return `Golden, crispy chips cooked fresh to order.`;
+  }
+  if (/sundae|dessert|soft serve|ice cream|cone/.test(lower)) {
+    return `Sweet treat to finish your meal on a delicious note.`;
+  }
+  if (/chicken/.test(lower)) {
+    return `Crispy fried chicken made with Champs signature seasoning.`;
+  }
+
+  return description ?? `Classic Champs favourite made fresh for you.`;
 }

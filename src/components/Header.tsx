@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
 import { BranchSwitcher } from "@/components/BranchSwitcher";
 
-const LOGO_SRC = "/images/champs/champs-logo.jpeg";
+const LOGO_SRC = "/images/champs/champs-logo.png";
 
 export function Header({ subtitle }: { subtitle?: string }) {
   return (
