@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { LogOut, RefreshCw, Bike, Package, CheckCircle2, ChefHat, Clock, XCircle, Utensils, Sparkles, ShieldCheck, MessageCircle } from "lucide-react";
+import { LogOut, RefreshCw, Bike, Package, CheckCircle2, ChefHat, Clock, XCircle, Utensils, Sparkles, ShieldCheck, MessageCircle, Paintbrush, UserPlus } from "lucide-react";
 import { Header } from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
@@ -9,6 +9,7 @@ import { waLink, orderStatusMessage } from "@/lib/whatsapp";
 import { fireNotification } from "@/lib/notifications";
 import { useBranch } from "@/lib/branch";
 import { getAccessRole } from "@/lib/roles";
+import { grantRoleByEmail } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Champs Chicken" }, { name: "robots", content: "noindex" }] }),
@@ -49,6 +50,9 @@ function Admin() {
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [role, setRole] = useState<"admin" | "staff" | null>(null);
   const [checking, setChecking] = useState(true);
+  const [grantEmail, setGrantEmail] = useState("");
+  const [grantRole, setGrantRole] = useState<"admin" | "staff">("admin");
+  const [grantBusy, setGrantBusy] = useState(false);
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   async function load() {
@@ -125,6 +129,21 @@ function Admin() {
     nav({ to: "/auth" });
   }
 
+  async function grantAccess(e: React.FormEvent) {
+    e.preventDefault();
+    if (!grantEmail.trim()) return;
+    setGrantBusy(true);
+    try {
+      await grantRoleByEmail({ data: { email: grantEmail.trim(), role: grantRole } });
+      toast.success(`${grantRole} access granted to ${grantEmail.trim()}`);
+      setGrantEmail("");
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not grant access");
+    } finally {
+      setGrantBusy(false);
+    }
+  }
+
   if (checking) return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
 
   if (!role) {
@@ -169,6 +188,9 @@ function Admin() {
             <Link to="/_authenticated/admin/promotions" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Sparkles className="h-3.5 w-3.5" /> Promos
             </Link>
+            <Link to="/_authenticated/admin/appearance" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+              <Paintbrush className="h-3.5 w-3.5" /> Appearance
+            </Link>
             <Link to="/_authenticated/admin/menu" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Utensils className="h-3.5 w-3.5" /> Menu
             </Link>
@@ -179,6 +201,30 @@ function Admin() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-4">
+        {role === "admin" && (
+          <form onSubmit={grantAccess} className="mb-4 rounded-2xl border bg-card p-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+              <UserPlus className="h-4 w-4 text-brand" /> Grant staff/admin access
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="email"
+                value={grantEmail}
+                onChange={(event) => setGrantEmail(event.target.value)}
+                placeholder="staff@example.com"
+                className="min-w-52 flex-1 rounded-md border px-3 py-2 text-sm"
+              />
+              <select value={grantRole} onChange={(event) => setGrantRole(event.target.value as "admin" | "staff")} className="rounded-md border px-3 py-2 text-sm">
+                <option value="admin">Admin</option>
+                <option value="staff">Staff</option>
+              </select>
+              <button disabled={grantBusy} className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-brand-foreground disabled:opacity-60">
+                {grantBusy ? "Granting…" : "Grant access"}
+              </button>
+            </div>
+          </form>
+        )}
+
         {/* Branch filter */}
         <div className="mb-3 flex flex-wrap gap-2 items-center">
           <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-bold">Branch</span>

@@ -1,14 +1,15 @@
 import { Link } from "@tanstack/react-router";
 import { User } from "lucide-react";
-import logo from "@/assets/champs-logo.jpeg.asset.json";
 import { BranchSwitcher } from "@/components/BranchSwitcher";
+
+const LOGO_SRC = "/images/champs/champs-logo.jpeg";
 
 export function Header({ subtitle }: { subtitle?: string }) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-lg items-center gap-2 px-4 py-2.5">
         <Link to="/" className="flex items-center gap-2.5 min-w-0">
-          <img src={logo.url} alt="Champs Chicken" className="h-9 w-auto" />
+          <img src={LOGO_SRC} alt="Champs Chicken" className="h-9 w-auto" />
           <div className="leading-tight min-w-0">
             <div className="font-display text-base text-brand truncate">Champs Chicken</div>
             {subtitle && <div className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">{subtitle}</div>}

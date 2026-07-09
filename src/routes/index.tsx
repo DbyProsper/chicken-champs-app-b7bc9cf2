@@ -6,20 +6,14 @@ import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { useBranch } from "@/lib/branch";
 import { activePromotionsQuery } from "@/lib/user-queries";
-import girlsBg from "@/assets/girls-lunch.jpg.asset.json";
-import chickenHero from "@/assets/chicken-hero.jpg.asset.json";
-import chickenChips from "@/assets/chicken-chips.jpg.asset.json";
-import chef from "@/assets/chef.jpg.asset.json";
-import couple from "@/assets/couple.jpg.asset.json";
 import { formatZAR } from "@/lib/format";
+import { FALLBACK_SETTINGS, imageSrcFor, siteContentQuery } from "@/lib/site-content";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Champs Chicken — Fried Chicken Since 1995 | Dikeni & Fort Beaufort" },
       { name: "description", content: "Order Champs Chicken online for pickup or delivery. Chicken, chips, burgers, fish, combos & shakes. Now serving Dikeni and Fort Beaufort." },
-      { property: "og:image", content: chickenHero.url },
-      { name: "twitter:image", content: chickenHero.url },
     ],
   }),
   component: Home,
@@ -28,7 +22,12 @@ export const Route = createFileRoute("/")({
 function Home() {
   const { active } = useBranch();
   const { data: promos = [] } = useQuery(activePromotionsQuery);
-  const headline = useTypewriter(["Crispy. Bold.", "Champs Chicken."], { typeMs: 65, holdMs: 1600, eraseMs: 35 });
+  const { data: content } = useQuery(siteContentQuery);
+  const settings = content?.settings ?? FALLBACK_SETTINGS;
+  const media = content?.media ?? [];
+  const heroSrc = imageSrcFor(settings.hero_image_key, media, "girls-lunch");
+  const headline = useTypewriter([settings.hero_line_one, settings.hero_line_two], { typeMs: 65, holdMs: 1600, eraseMs: 35 });
+  const heroBody = settings.hero_body.replace("your town", active?.city ?? "your town");
 
   return (
     <div className="min-h-screen pb-24">
@@ -38,7 +37,7 @@ function Home() {
       <section className="relative overflow-hidden text-white min-h-[68vh] sm:min-h-[520px] flex">
         <div
           className="absolute inset-0 bg-cover"
-          style={{ backgroundImage: `url(${girlsBg.url})`, backgroundPosition: "50% 30%" }}
+          style={{ backgroundImage: `url(${heroSrc})`, backgroundPosition: `${settings.hero_focus_x}% ${settings.hero_focus_y}%` }}
           aria-hidden
         />
         <div className="absolute inset-0 bg-gradient-to-br from-[#1a0708]/95 via-[#2b0a0c]/80 to-brand/60 mix-blend-multiply" aria-hidden />
@@ -46,7 +45,7 @@ function Home() {
 
         <div className="relative mx-auto flex w-full max-w-lg flex-col justify-end px-5 py-12 sm:py-16">
           <div className="flex items-center gap-2 text-white/90 text-[11px] font-bold uppercase tracking-widest">
-            <Flame className="h-3.5 w-3.5 text-brand" /> Now taking online orders
+            <Flame className="h-3.5 w-3.5 text-brand" /> {settings.hero_eyebrow}
           </div>
           <h1 className="mt-3 font-display text-5xl sm:text-6xl leading-[0.9] drop-shadow-lg min-h-[3.2em] sm:min-h-[2.6em]">
             {headline.line1}
@@ -55,21 +54,21 @@ function Home() {
             <span className="ml-0.5 inline-block w-[0.08em] h-[0.9em] align-baseline bg-white/80 animate-pulse" aria-hidden />
           </h1>
           <p className="mt-4 text-sm text-white/85 max-w-xs">
-            Freshly fried chicken, loaded chips and legendary combos. Order for pickup or delivery in {active?.city ?? "your town"}.
+            {heroBody}
           </p>
           <div className="mt-6 flex flex-wrap gap-2.5">
             <Link to="/menu" className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-3 text-sm font-bold text-brand-foreground hover:bg-brand-dark transition-colors shadow-lg shadow-brand/40">
-              Order now <ChevronRight className="h-4 w-4" />
+              {settings.primary_cta_label} <ChevronRight className="h-4 w-4" />
             </Link>
             <Link to="/track" className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/20 backdrop-blur px-6 py-3 text-sm font-semibold text-white hover:bg-white/10">
-              Track order
+              {settings.secondary_cta_label}
             </Link>
           </div>
         </div>
       </section>
 
       {/* Promotions strip */}
-      {promos.length > 0 && (
+      {settings.show_promotions && promos.length > 0 && (
         <section className="mx-auto max-w-lg px-5 pt-6">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="h-4 w-4 text-brand" />
@@ -95,17 +94,17 @@ function Home() {
       )}
 
       {/* Quick categories */}
-      <section className="mx-auto max-w-lg px-5 pt-6">
+      {settings.show_categories && <section className="mx-auto max-w-lg px-5 pt-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-display text-2xl">Browse the menu</h2>
           <Link to="/menu" className="text-sm font-semibold text-brand">See all</Link>
         </div>
         <div className="grid grid-cols-2 gap-3">
           {[
-            { title: "Chicken", desc: "1pc → 21pc bucket", img: chickenHero.url, slug: "chicken" },
-            { title: "Combos", desc: "Chicken + chips", img: chickenChips.url, slug: "combos" },
-            { title: "Burgers", desc: "Mississippi, Dekka", img: chef.url, slug: "burgers" },
-            { title: "Shakes", desc: "Cold & creamy", img: couple.url, slug: "shakes" },
+            { title: "Chicken", desc: "1pc → 21pc bucket", img: imageSrcFor("chicken-hero", media, "chicken-hero"), slug: "chicken" },
+            { title: "Combos", desc: "Chicken + chips", img: imageSrcFor("chicken-chips", media, "chicken-chips"), slug: "combos" },
+            { title: "Burgers", desc: "Mississippi, Dekka", img: imageSrcFor("chef", media, "chef"), slug: "burgers" },
+            { title: "Shakes", desc: "Cold & creamy", img: imageSrcFor("couple", media, "couple"), slug: "shakes" },
           ].map((c) => (
             <Link
               key={c.slug}
@@ -122,19 +121,19 @@ function Home() {
             </Link>
           ))}
         </div>
-      </section>
+      </section>}
 
       {/* Brand strip */}
-      <section className="mx-auto max-w-lg px-5 pt-6">
+      {settings.show_brand_strip && <section className="mx-auto max-w-lg px-5 pt-6">
         <div className="grid grid-cols-2 gap-3">
-          <img src={couple.url} alt="Customers enjoying Champs" className="rounded-2xl aspect-square object-cover" />
-          <img src={chef.url} alt="Champs chef" className="rounded-2xl aspect-square object-cover" />
+          <img src={imageSrcFor("couple", media, "couple")} alt="Customers enjoying Champs" className="rounded-2xl aspect-square object-cover" />
+          <img src={imageSrcFor("chef", media, "chef")} alt="Champs chef" className="rounded-2xl aspect-square object-cover" />
         </div>
         <p className="mt-3 text-center font-display text-2xl text-brand">We love to please.</p>
-      </section>
+      </section>}
 
       {/* Store info per active branch */}
-      <section className="mx-auto max-w-lg px-5 pt-6">
+      {settings.show_branch_info && <section className="mx-auto max-w-lg px-5 pt-6">
         <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-xs uppercase tracking-widest text-muted-foreground">Your branch</div>
@@ -163,7 +162,7 @@ function Home() {
             </div>
           )}
         </div>
-      </section>
+      </section>}
 
       <BottomNav />
     </div>
