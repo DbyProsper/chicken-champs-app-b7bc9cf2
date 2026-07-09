@@ -94,7 +94,7 @@ function MenuAdmin() {
     <div className="min-h-screen bg-muted/40 pb-20">
       <header className="sticky top-0 z-30 border-b bg-background">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <Link to="/_authenticated/admin" className="inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft className="h-4 w-4" /> Orders</Link>
+          <Link to="/admin" className="inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft className="h-4 w-4" /> Orders</Link>
           <div className="font-display text-xl text-brand">Edit Menu</div>
           <button onClick={saveAll} disabled={Object.keys(dirty).length === 0} className="inline-flex items-center gap-1 rounded-full bg-brand px-4 py-1.5 text-xs font-bold text-brand-foreground disabled:opacity-40">
             <Save className="h-3.5 w-3.5" /> Save {Object.keys(dirty).length || ""}

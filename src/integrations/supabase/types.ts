@@ -92,6 +92,45 @@ export type Database = {
         }
         Relationships: []
       }
+      media_assets: {
+        Row: {
+          alt: string
+          created_at: string
+          id: string
+          image_key: string
+          is_active: boolean
+          sort_order: number
+          src: string
+          title: string
+          updated_at: string
+          usage: string
+        }
+        Insert: {
+          alt?: string
+          created_at?: string
+          id?: string
+          image_key: string
+          is_active?: boolean
+          sort_order?: number
+          src: string
+          title: string
+          updated_at?: string
+          usage?: string
+        }
+        Update: {
+          alt?: string
+          created_at?: string
+          id?: string
+          image_key?: string
+          is_active?: boolean
+          sort_order?: number
+          src?: string
+          title?: string
+          updated_at?: string
+          usage?: string
+        }
+        Relationships: []
+      }
       menu_items: {
         Row: {
           category_id: string
@@ -340,6 +379,63 @@ export type Database = {
           },
         ]
       }
+      site_settings: {
+        Row: {
+          hero_body: string
+          hero_eyebrow: string
+          hero_focus_x: number
+          hero_focus_y: number
+          hero_image_key: string
+          hero_line_one: string
+          hero_line_two: string
+          id: string
+          primary_cta_label: string
+          secondary_cta_label: string
+          show_branch_info: boolean
+          show_brand_strip: boolean
+          show_categories: boolean
+          show_promotions: boolean
+          theme: string
+          updated_at: string
+        }
+        Insert: {
+          hero_body?: string
+          hero_eyebrow?: string
+          hero_focus_x?: number
+          hero_focus_y?: number
+          hero_image_key?: string
+          hero_line_one?: string
+          hero_line_two?: string
+          id?: string
+          primary_cta_label?: string
+          secondary_cta_label?: string
+          show_branch_info?: boolean
+          show_brand_strip?: boolean
+          show_categories?: boolean
+          show_promotions?: boolean
+          theme?: string
+          updated_at?: string
+        }
+        Update: {
+          hero_body?: string
+          hero_eyebrow?: string
+          hero_focus_x?: number
+          hero_focus_y?: number
+          hero_image_key?: string
+          hero_line_one?: string
+          hero_line_two?: string
+          id?: string
+          primary_cta_label?: string
+          secondary_cta_label?: string
+          show_branch_info?: boolean
+          show_brand_strip?: boolean
+          show_categories?: boolean
+          show_promotions?: boolean
+          theme?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           branch_id: string | null
@@ -377,6 +473,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_my_access_role: {
+        Args: never
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -384,6 +484,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_champs_owner_email: { Args: never; Returns: boolean }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {

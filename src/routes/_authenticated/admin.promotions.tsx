@@ -85,7 +85,7 @@ function PromoAdmin() {
     <div className="min-h-screen bg-muted/40 pb-20">
       <header className="sticky top-0 z-30 border-b bg-background">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <Link to="/_authenticated/admin" className="inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft className="h-4 w-4" /> Orders</Link>
+          <Link to="/admin" className="inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft className="h-4 w-4" /> Orders</Link>
           <div className="font-display text-xl text-brand inline-flex items-center gap-1.5">
             <Sparkles className="h-4 w-4" /> Promotions
           </div>
