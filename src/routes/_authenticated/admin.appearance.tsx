@@ -85,7 +85,7 @@ function AppearanceAdmin() {
     <div className="min-h-screen bg-muted/40 pb-20">
       <header className="sticky top-0 z-30 border-b bg-background">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link to="/_authenticated/admin" className="inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft className="h-4 w-4" /> Orders</Link>
+          <Link to="/admin" className="inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft className="h-4 w-4" /> Orders</Link>
           <div className="font-display text-xl text-brand inline-flex items-center gap-1.5"><Paintbrush className="h-4 w-4" /> Appearance</div>
           <button onClick={saveSettings} disabled={busy} className="inline-flex items-center gap-1 rounded-full bg-brand px-4 py-1.5 text-xs font-bold text-brand-foreground disabled:opacity-60">
             <Save className="h-3.5 w-3.5" /> {busy ? "Saving…" : "Save"}

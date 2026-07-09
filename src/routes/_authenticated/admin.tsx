@@ -185,13 +185,13 @@ function Admin() {
             <ShieldCheck className="h-5 w-5" /> Champs Admin
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/_authenticated/admin/promotions" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/admin/promotions" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Sparkles className="h-3.5 w-3.5" /> Promos
             </Link>
-            <Link to="/_authenticated/admin/appearance" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/admin/appearance" className="hidden sm:inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Paintbrush className="h-3.5 w-3.5" /> Appearance
             </Link>
-            <Link to="/_authenticated/admin/menu" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/admin/menu" className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Utensils className="h-3.5 w-3.5" /> Menu
             </Link>
             <button onClick={load} className="grid h-8 w-8 place-items-center rounded-full border hover:bg-accent"><RefreshCw className="h-4 w-4" /></button>

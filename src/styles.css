@@ -95,8 +95,7 @@
   line-height: 1.25rem;
   color: var(--color-foreground);
   outline: none;
-}
-
-@utility input:focus {
-  box-shadow: 0 0 0 2px var(--color-ring);
+  &:focus {
+    box-shadow: 0 0 0 2px var(--color-ring);
+  }
 }
