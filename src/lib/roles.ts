@@ -60,20 +60,26 @@ export async function getAccessRole(userId?: string | null): Promise<AccessRole>
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const { activeUserId, user, userError } = await resolveUserContext(userId);
+    if (!activeUserId) {
+      if (attempt < 3) {
+        await wait(250);
+        continue;
+      }
+      return null;
+    }
     const email = user?.email?.toLowerCase() ?? "";
     const adminEmails = getAdminEmails();
 
-    const [{ data: roles, error: rolesError }, { data: isAdminData, error: adminError }, { data: isStaffData, error: staffError }] = await Promise.all([
+    const [{ data: roles, error: rolesError }, { data: myRole, error: myRoleError }] = await Promise.all([
       supabase.from("user_roles").select("role").eq("user_id", activeUserId),
-      supabase.rpc("has_role", { _user_id: activeUserId, _role: "admin" }),
-      supabase.rpc("is_staff", { _user_id: activeUserId }),
+      supabase.rpc("get_my_access_role"),
     ]);
 
     if (rolesError) console.warn("[roles] failed to read roles", rolesError.message);
-    if (adminError) console.warn("[roles] failed to check admin role", adminError.message);
-    if (staffError) console.warn("[roles] failed to check staff role", staffError.message);
+    if (myRoleError) console.warn("[roles] failed to read access role", myRoleError.message);
 
     const found = (roles ?? []).map((role) => normalizeRole(role.role)).filter(Boolean) as AccessRole[];
+    const databaseRole = normalizeRole(myRole);
     const metadataRole = normalizeRole(user?.app_metadata?.role ?? user?.user_metadata?.role);
     const metadataRoles = (user?.app_metadata?.roles ?? user?.user_metadata?.roles ?? []) as unknown[];
     const metadataRoleFromArray = metadataRoles.map((role) => normalizeRole(role)).find(Boolean);
@@ -84,8 +90,8 @@ export async function getAccessRole(userId?: string | null): Promise<AccessRole>
     const isAdminByMetadata = metadataFlags.some((value) => value === true || value === "true" || value === "admin");
     const isAdminByEmail = adminEmails.length > 0 && email.length > 0 && adminEmails.includes(email);
 
-    if (found.includes("admin") || isAdminData === true || metadataRole === "admin" || metadataRoleFromArray === "admin" || isAdminByMetadata || isAdminByEmail) return "admin";
-    if (found.includes("staff") || isStaffData === true || metadataRole === "staff" || metadataRoleFromArray === "staff") return "staff";
+    if (databaseRole === "admin" || found.includes("admin") || metadataRole === "admin" || metadataRoleFromArray === "admin" || isAdminByMetadata || isAdminByEmail) return "admin";
+    if (databaseRole === "staff" || found.includes("staff") || metadataRole === "staff" || metadataRoleFromArray === "staff") return "staff";
 
     if (userError || attempt < 3) {
       await wait(250);
