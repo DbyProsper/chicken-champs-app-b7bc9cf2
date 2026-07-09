@@ -34,9 +34,13 @@ function MenuPage() {
   const displayCategories = useMemo(() => {
     const hasSalads = categories.some((c) => c.slug === "salads" || c.name.toLowerCase().includes("salad"));
     const hasDrinks = categories.some((c) => c.slug === "drinks" || c.name.toLowerCase().includes("drink"));
+    const hasExtras = categories.some((c) => c.slug === "extras" || c.name.toLowerCase().includes("extra"));
 
     let nextCategories = categories;
     const saladsCategory = { id: "salads-section", name: "Salads", slug: "salads" } as const;
+    const drinksCategory = { id: "drinks-section", name: "Drinks", slug: "drinks" } as const;
+    const extrasCategory = { id: "extras-section", name: "Extras", slug: "extras" } as const;
+
     if (!hasSalads) {
       const chipsIndex = nextCategories.findIndex((c) => c.slug === "chips" || c.name.toLowerCase().includes("chips"));
       nextCategories = chipsIndex === -1
@@ -44,17 +48,30 @@ function MenuPage() {
         : [...nextCategories.slice(0, chipsIndex + 1), saladsCategory, ...nextCategories.slice(chipsIndex + 1)];
     }
 
-    if (hasDrinks) return nextCategories;
+    if (!hasDrinks) {
+      const insertAfter = nextCategories.reduce((lastIndex, c, index) => {
+        return /(shake|frostee|sundae|dessert)/.test(c.slug) || /(shake|frostee|sundae|dessert)/.test(c.name.toLowerCase())
+          ? index
+          : lastIndex;
+      }, -1);
+      nextCategories = insertAfter === -1
+        ? [...nextCategories, drinksCategory]
+        : [...nextCategories.slice(0, insertAfter + 1), drinksCategory, ...nextCategories.slice(insertAfter + 1)];
+    }
 
-    const drinksCategory = { id: "drinks-section", name: "Drinks", slug: "drinks" } as const;
-    const insertAfter = nextCategories.reduce((lastIndex, c, index) => {
-      return /(shake|frostee|sundae|dessert)/.test(c.slug) || /(shake|frostee|sundae|dessert)/.test(c.name.toLowerCase())
-        ? index
-        : lastIndex;
-    }, -1);
+    if (!hasExtras) {
+      const drinksIndex = nextCategories.findIndex((c) => c.slug === "drinks" || c.name.toLowerCase().includes("drink"));
+      const insertAfter = drinksIndex !== -1 ? drinksIndex : nextCategories.reduce((lastIndex, c, index) => {
+        return /(shake|frostee|sundae|dessert)/.test(c.slug) || /(shake|frostee|sundae|dessert)/.test(c.name.toLowerCase())
+          ? index
+          : lastIndex;
+      }, -1);
+      nextCategories = insertAfter === -1
+        ? [...nextCategories, extrasCategory]
+        : [...nextCategories.slice(0, insertAfter + 1), extrasCategory, ...nextCategories.slice(insertAfter + 1)];
+    }
 
-    if (insertAfter === -1) return [...nextCategories, drinksCategory];
-    return [...nextCategories.slice(0, insertAfter + 1), drinksCategory, ...nextCategories.slice(insertAfter + 1)];
+    return nextCategories;
   }, [categories]);
 
   const [active, setActive] = useState(displayCategories[0]?.slug ?? "");
@@ -66,7 +83,9 @@ function MenuPage() {
     const map: Record<string, MenuItem[]> = {};
     for (const c of displayCategories) map[c.slug] = [];
     const drinkCategory = displayCategories.find((c) => c.slug === "drinks" || c.name.toLowerCase().includes("drink"));
+    const extrasCategory = displayCategories.find((c) => c.slug === "extras" || c.name.toLowerCase().includes("extra"));
     const drinkMatcher = /\b(?:pepsi|coke|mountain dew|powerade|spar letta|spar)\b/i;
+    const bunMatcher = /\bbuns?\b/i;
 
     for (const it of items) {
       const combinedName = `${it.name} ${it.variant_label ?? ""}`;
@@ -83,6 +102,13 @@ function MenuPage() {
       if (drinkMatcher.test(combinedName) && drinkCategory) {
         if (!map[drinkCategory.slug]) map[drinkCategory.slug] = [];
         map[drinkCategory.slug].push(it);
+        continue;
+      }
+
+      // Place bun items into the Extras section
+      if (bunMatcher.test(combinedName) && extrasCategory) {
+        if (!map[extrasCategory.slug]) map[extrasCategory.slug] = [];
+        map[extrasCategory.slug].push(it);
         continue;
       }
 
@@ -281,6 +307,9 @@ function getMenuDescription(name: string, variant: string | null, description: s
   }
   if (/sauce|dip/.test(lower)) {
     return `Perfect sauce for dipping and boosting every bite.`;
+  }
+  if (/bun(?:s)?/.test(lower)) {
+    return `Soft fresh buns to complete your meal.`;
   }
   if (/\b(?:pepsi|coke|mountain dew|powerade|spar letta|spar)\b/.test(lower)) {
     return `Chilled soft drink to pair with your meal.`;

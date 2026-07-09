@@ -53,6 +53,7 @@ const IMAGE_MAP: Array<{ pattern: RegExp; src: string; alt: string }> = [
   { pattern: /sundae - caramel/, src: `${IMAGE_BASE}/Sundae - Caramel.png`, alt: "Caramel sundae" },
   { pattern: /sundae - choc/, src: `${IMAGE_BASE}/Sundae - Choc.png`, alt: "Chocolate sundae" },
   { pattern: /sundae - strawberry/, src: `${IMAGE_BASE}/Sundae - Strawberry.png`, alt: "Strawberry sundae" },
+  { pattern: /buns?/, src: `${IMAGE_BASE}/Buns.png`, alt: "Buns" },
   { pattern: /pepsi\s*can|pespsi\s*can/, src: `${IMAGE_BASE}/Pespsi Can.png`, alt: "Pepsi can" },
   { pattern: /pepsi\s*2l/, src: `${IMAGE_BASE}/Pepsi 2L.png`, alt: "Pepsi 2L" },
   { pattern: /mountain\s*dew\s*can/, src: `${IMAGE_BASE}/Mountain Dew Can.png`, alt: "Mountain Dew can" },
