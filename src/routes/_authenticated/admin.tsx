@@ -1,6 +1,6 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { LogOut, RefreshCw, Bike, Package, CheckCircle2, ChefHat, Clock, XCircle, Utensils, Sparkles, ShieldCheck, MessageCircle, Paintbrush, UserPlus } from "lucide-react";
+import { LogOut, RefreshCw, Bike, Package, CheckCircle2, ChefHat, Clock, XCircle, Utensils, Sparkles, ShieldCheck, MessageCircle, Paintbrush, UserPlus, PanelLeftClose, PanelLeftOpen, TrendingUp } from "lucide-react";
 import { Header } from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
@@ -41,8 +41,15 @@ const STATUS_META = {
   cancelled: { label: "Cancelled", icon: XCircle, color: "bg-neutral-500" },
 } as const;
 
+function isSameDay(createdAt: string, date: Date = new Date()) {
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return false;
+  return created.getFullYear() === date.getFullYear() && created.getMonth() === date.getMonth() && created.getDate() === date.getDate();
+}
+
 function Admin() {
   const nav = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { branches, active: activeBranch, setActive } = useBranch();
   const [orders, setOrders] = useState<Order[]>([]);
   const [itemsByOrder, setItemsByOrder] = useState<Record<string, ItemRow[]>>({});
@@ -53,6 +60,7 @@ function Admin() {
   const [grantEmail, setGrantEmail] = useState("");
   const [grantRole, setGrantRole] = useState<"admin" | "staff">("admin");
   const [grantBusy, setGrantBusy] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   async function load() {
@@ -93,6 +101,20 @@ function Admin() {
       if (r) await load();
     })();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem("champs-admin-sidebar-collapsed");
+      if (stored === "true") setSidebarCollapsed(true);
+      else if (stored === "false") setSidebarCollapsed(false);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem("champs-admin-sidebar-collapsed", sidebarCollapsed ? "true" : "false"); } catch {}
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (!role) return;
@@ -144,6 +166,10 @@ function Admin() {
     }
   }
 
+  if (pathname !== "/admin") {
+    return <Outlet />;
+  }
+
   if (checking) return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
 
   if (!role) {
@@ -168,13 +194,17 @@ function Admin() {
     return o.status === filter;
   });
 
+  const todayRevenueOrders = orders.filter((o) => {
+    if (branchFilter !== "all" && o.branch_id !== branchFilter) return false;
+    if (o.status === "cancelled") return false;
+    return isSameDay(o.created_at);
+  });
+
   const stats = {
     new: filtered.filter((o) => o.status === "pending").length,
     prep: filtered.filter((o) => o.status === "preparing").length,
     out: filtered.filter((o) => o.status === "out_for_delivery").length,
-    revenue: orders
-      .filter((o) => (branchFilter === "all" || o.branch_id === branchFilter) && new Date(o.created_at).toDateString() === new Date().toDateString() && o.status !== "cancelled")
-      .reduce((s, o) => s + o.subtotal_cents, 0),
+    revenue: todayRevenueOrders.reduce((s, o) => s + o.subtotal_cents, 0),
   };
 
   return (
@@ -186,14 +216,17 @@ function Admin() {
           </div>
           <div className="flex items-center gap-2">
             {/* Small-screen quick links (hidden on large screens where sidebar appears) */}
-            <Link to="/_authenticated/admin/promotions" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/admin/promotions" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Sparkles className="h-3.5 w-3.5" /> Promos
             </Link>
-            <Link to="/_authenticated/admin/menu" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/admin/menu" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Utensils className="h-3.5 w-3.5" /> Menu
             </Link>
-            <Link to="/_authenticated/admin/appearance" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+            <Link to="/admin/appearance" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Paintbrush className="h-3.5 w-3.5" /> Appearance
+            </Link>
+            <Link to="/admin/revenue" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+              <TrendingUp className="h-3.5 w-3.5" /> Revenue
             </Link>
             <button onClick={load} className="grid h-8 w-8 place-items-center rounded-full border hover:bg-accent"><RefreshCw className="h-4 w-4" /></button>
             <button onClick={signOut} className="grid h-8 w-8 place-items-center rounded-full border hover:bg-accent"><LogOut className="h-4 w-4" /></button>
@@ -203,20 +236,31 @@ function Admin() {
 
       <div className="mx-auto max-w-6xl px-4 py-4">
         <div className="lg:flex lg:items-start lg:gap-6">
-          <aside className="hidden lg:block w-56 shrink-0">
-            <div className="rounded-2xl border bg-card p-3 sticky top-[68px]">
-              <nav className="space-y-2">
-                <Link to="/_authenticated/admin" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
-                  <ShieldCheck className="h-4 w-4" /> Orders
+          <aside className="mb-4 w-full lg:mb-0 lg:w-56 lg:shrink-0">
+            <div className="rounded-2xl border bg-card p-3 lg:sticky lg:top-[68px]">
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed((value) => !value)}
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-md border bg-background px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent"
+              >
+                {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+                {!sidebarCollapsed && <span>Collapse</span>}
+              </button>
+              <nav className="flex flex-wrap gap-2 lg:flex-col lg:gap-2">
+                <Link to="/admin" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+                  <ShieldCheck className="h-4 w-4" /> {!sidebarCollapsed && "Orders"}
                 </Link>
-                <Link to="/_authenticated/admin/menu" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
-                  <Utensils className="h-4 w-4" /> Menu
+                <Link to="/admin/menu" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+                  <Utensils className="h-4 w-4" /> {!sidebarCollapsed && "Menu"}
                 </Link>
-                <Link to="/_authenticated/admin/promotions" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
-                  <Sparkles className="h-4 w-4" /> Promotions
+                <Link to="/admin/promotions" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+                  <Sparkles className="h-4 w-4" /> {!sidebarCollapsed && "Promotions"}
                 </Link>
-                <Link to="/_authenticated/admin/appearance" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold hover:bg-accent">
-                  <Paintbrush className="h-4 w-4" /> Appearance
+                <Link to="/admin/appearance" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+                  <Paintbrush className="h-4 w-4" /> {!sidebarCollapsed && "Appearance"}
+                </Link>
+                <Link to="/admin/revenue" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+                  <TrendingUp className="h-4 w-4" /> {!sidebarCollapsed && "Revenue Overview"}
                 </Link>
               </nav>
             </div>
