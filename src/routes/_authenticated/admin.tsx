@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { waLink, orderStatusMessage } from "@/lib/whatsapp";
 import { fireNotification } from "@/lib/notifications";
 import { useBranch } from "@/lib/branch";
+import { getAccessRole } from "@/lib/roles";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Champs Chicken" }, { name: "robots", content: "noindex" }] }),
@@ -82,9 +83,7 @@ function Admin() {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
-      const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", u.user.id);
-      const found = (roles ?? []).map((r) => r.role);
-      const r = found.includes("admin") ? "admin" : found.includes("staff") ? "staff" : null;
+      const r = await getAccessRole(u.user.id);
       setRole(r as any);
       setChecking(false);
       if (r) await load();

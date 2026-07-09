@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Mail, Lock, User as UserIcon, Phone } from "lucide-react";
+import { getAccessRole } from "@/lib/roles";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -29,9 +30,8 @@ function Auth() {
     (async () => {
       const { data } = await supabase.auth.getUser();
       if (data.user) {
-        // Route based on role
-        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", data.user.id);
-        const isStaff = (roles ?? []).some((r) => r.role === "admin" || r.role === "staff");
+        const role = await getAccessRole(data.user.id);
+        const isStaff = role === "admin" || role === "staff";
         nav({ to: isStaff ? "/admin" : "/account" });
         return;
       }
@@ -60,8 +60,8 @@ function Auth() {
       }
       const { data: u } = await supabase.auth.getUser();
       if (u.user) {
-        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", u.user.id);
-        const isStaff = (roles ?? []).some((r) => r.role === "admin" || r.role === "staff");
+        const role = await getAccessRole(u.user.id);
+        const isStaff = role === "admin" || role === "staff";
         nav({ to: isStaff ? "/admin" : "/account" });
       }
     } catch (err: any) {

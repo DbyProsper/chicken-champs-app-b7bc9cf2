@@ -9,6 +9,7 @@ import { useCart } from "@/lib/cart";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getMenuImageForItem } from "@/lib/menu-images";
 
 export const Route = createFileRoute("/menu")({
   head: () => ({
@@ -151,9 +152,13 @@ function Row({ item }: { item: MenuItem }) {
 
   const label = item.variant_label ? `${item.name} — ${item.variant_label}` : item.name;
   const available = item.is_available;
+  const image = getMenuImageForItem(item.name, item.variant_label);
 
   return (
     <div className={cn("flex items-start gap-3 rounded-xl border border-border bg-card p-3", !available && "opacity-50")}>
+      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/60">
+        <img src={image.src} alt={image.alt} className="h-full w-full object-cover" />
+      </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-3">
           <div className="font-semibold text-sm truncate">{label}</div>

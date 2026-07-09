@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { myOrdersQuery, activePromotionsQuery } from "@/lib/user-queries";
 import { menuQuery } from "@/lib/menu-queries";
 import { useCart } from "@/lib/cart";
+import { getAccessRole } from "@/lib/roles";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -33,12 +34,12 @@ function Account() {
         return;
       }
       setUserId(u.user.id);
-      const [{ data: p }, { data: roles }] = await Promise.all([
+      const [{ data: p }, role] = await Promise.all([
         supabase.from("profiles").select("full_name, phone").eq("id", u.user.id).maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", u.user.id),
+        getAccessRole(u.user.id),
       ]);
       setProfile(p);
-      setIsStaff((roles ?? []).some((r) => r.role === "admin" || r.role === "staff"));
+      setIsStaff(role === "admin" || role === "staff");
       setChecking(false);
     })();
   }, [nav]);
