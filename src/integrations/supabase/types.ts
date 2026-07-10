@@ -92,6 +92,163 @@ export type Database = {
         }
         Relationships: []
       }
+      deliveries: {
+        Row: {
+          created_at: string
+          delivery_fee_cents: number
+          distance_km: number | null
+          driver_id: string | null
+          id: string
+          order_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_fee_cents?: number
+          distance_km?: number | null
+          driver_id?: string | null
+          id?: string
+          order_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_fee_cents?: number
+          distance_km?: number | null
+          driver_id?: string | null
+          id?: string
+          order_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliveries_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_settings: {
+        Row: {
+          id: string
+          max_radius_km: number
+          tier1_fee_cents: number
+          tier1_max_km: number
+          tier2_fee_cents: number
+          tier2_max_km: number
+          tier3_fee_cents: number
+          tier3_max_km: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          max_radius_km?: number
+          tier1_fee_cents?: number
+          tier1_max_km?: number
+          tier2_fee_cents?: number
+          tier2_max_km?: number
+          tier3_fee_cents?: number
+          tier3_max_km?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          max_radius_km?: number
+          tier1_fee_cents?: number
+          tier1_max_km?: number
+          tier2_fee_cents?: number
+          tier2_max_km?: number
+          tier3_fee_cents?: number
+          tier3_max_km?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      driver_locations: {
+        Row: {
+          driver_id: string
+          id: string
+          latitude: number
+          longitude: number
+          updated_at: string
+        }
+        Insert: {
+          driver_id: string
+          id?: string
+          latitude: number
+          longitude: number
+          updated_at?: string
+        }
+        Update: {
+          driver_id?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_locations_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drivers: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          id: string
+          name: string
+          phone: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          phone: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drivers_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_assets: {
         Row: {
           alt: string
@@ -229,7 +386,14 @@ export type Database = {
           created_at: string
           customer_name: string
           customer_phone: string
+          delivery_address: string | null
+          delivery_fee_cents: number
+          delivery_lat: number | null
+          delivery_lng: number | null
           delivery_notes: string | null
+          delivery_status: string | null
+          distance_km: number | null
+          driver_id: string | null
           fulfillment: Database["public"]["Enums"]["fulfillment_type"]
           id: string
           order_number: string
@@ -246,7 +410,14 @@ export type Database = {
           created_at?: string
           customer_name: string
           customer_phone: string
+          delivery_address?: string | null
+          delivery_fee_cents?: number
+          delivery_lat?: number | null
+          delivery_lng?: number | null
           delivery_notes?: string | null
+          delivery_status?: string | null
+          distance_km?: number | null
+          driver_id?: string | null
           fulfillment: Database["public"]["Enums"]["fulfillment_type"]
           id?: string
           order_number?: string
@@ -263,7 +434,14 @@ export type Database = {
           created_at?: string
           customer_name?: string
           customer_phone?: string
+          delivery_address?: string | null
+          delivery_fee_cents?: number
+          delivery_lat?: number | null
+          delivery_lng?: number | null
           delivery_notes?: string | null
+          delivery_status?: string | null
+          distance_km?: number | null
+          driver_id?: string | null
           fulfillment?: Database["public"]["Enums"]["fulfillment_type"]
           id?: string
           order_number?: string
@@ -485,6 +663,7 @@ export type Database = {
         Returns: boolean
       }
       is_champs_owner_email: { Args: never; Returns: boolean }
+      is_driver: { Args: { _user_id: string }; Returns: boolean }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
