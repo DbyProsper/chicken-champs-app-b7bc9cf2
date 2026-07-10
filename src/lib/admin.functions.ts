@@ -33,5 +33,5 @@ export const grantRoleByEmail = createServerFn({ method: "POST" })
       .upsert({ user_id: targetUser.id, role: data.role }, { onConflict: "user_id,role" });
 
     if (upsertError) throw upsertError;
-    return { ok: true, userId: targetUser.id, email: targetUser.email ?? data.email, role: data.role };
+    return { ok: true, user_id: targetUser.id, userId: targetUser.id, email: targetUser.email ?? data.email, role: data.role };
   });
