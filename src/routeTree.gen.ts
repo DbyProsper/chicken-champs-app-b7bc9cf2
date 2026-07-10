@@ -18,6 +18,7 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OrderNumberRouteImport } from './routes/order.$number'
+import { Route as AuthenticatedDriverRouteImport } from './routes/_authenticated/driver'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAdminRevenueRouteImport } from './routes/_authenticated/admin.revenue'
 import { Route as AuthenticatedAdminPromotionsRouteImport } from './routes/_authenticated/admin.promotions'
@@ -68,6 +69,11 @@ const OrderNumberRoute = OrderNumberRouteImport.update({
   path: '/order/$number',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedDriverRoute = AuthenticatedDriverRouteImport.update({
+  id: '/driver',
+  path: '/driver',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/menu': typeof MenuRoute
   '/track': typeof TrackRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/driver': typeof AuthenticatedDriverRoute
   '/order/$number': typeof OrderNumberRoute
   '/admin/appearance': typeof AuthenticatedAdminAppearanceRoute
   '/admin/menu': typeof AuthenticatedAdminMenuRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/menu': typeof MenuRoute
   '/track': typeof TrackRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/driver': typeof AuthenticatedDriverRoute
   '/order/$number': typeof OrderNumberRoute
   '/admin/appearance': typeof AuthenticatedAdminAppearanceRoute
   '/admin/menu': typeof AuthenticatedAdminMenuRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/menu': typeof MenuRoute
   '/track': typeof TrackRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/_authenticated/driver': typeof AuthenticatedDriverRoute
   '/order/$number': typeof OrderNumberRoute
   '/_authenticated/admin/appearance': typeof AuthenticatedAdminAppearanceRoute
   '/_authenticated/admin/menu': typeof AuthenticatedAdminMenuRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/menu'
     | '/track'
     | '/admin'
+    | '/driver'
     | '/order/$number'
     | '/admin/appearance'
     | '/admin/menu'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/menu'
     | '/track'
     | '/admin'
+    | '/driver'
     | '/order/$number'
     | '/admin/appearance'
     | '/admin/menu'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/menu'
     | '/track'
     | '/_authenticated/admin'
+    | '/_authenticated/driver'
     | '/order/$number'
     | '/_authenticated/admin/appearance'
     | '/_authenticated/admin/menu'
@@ -270,6 +282,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderNumberRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/driver': {
+      id: '/_authenticated/driver'
+      path: '/driver'
+      fullPath: '/driver'
+      preLoaderRoute: typeof AuthenticatedDriverRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -327,10 +346,12 @@ const AuthenticatedAdminRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
+  AuthenticatedDriverRoute: typeof AuthenticatedDriverRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedDriverRoute: AuthenticatedDriverRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
