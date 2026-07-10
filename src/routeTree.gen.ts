@@ -18,10 +18,13 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OrderNumberRouteImport } from './routes/order.$number'
+import { Route as AuthenticatedDriverRouteImport } from './routes/_authenticated/driver'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAdminRevenueRouteImport } from './routes/_authenticated/admin.revenue'
 import { Route as AuthenticatedAdminPromotionsRouteImport } from './routes/_authenticated/admin.promotions'
 import { Route as AuthenticatedAdminMenuRouteImport } from './routes/_authenticated/admin.menu'
+import { Route as AuthenticatedAdminDeliverySettingsRouteImport } from './routes/_authenticated/admin.delivery-settings'
+import { Route as AuthenticatedAdminDeliveriesRouteImport } from './routes/_authenticated/admin.deliveries'
 import { Route as AuthenticatedAdminAppearanceRouteImport } from './routes/_authenticated/admin.appearance'
 
 const TrackRoute = TrackRouteImport.update({
@@ -68,6 +71,11 @@ const OrderNumberRoute = OrderNumberRouteImport.update({
   path: '/order/$number',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedDriverRoute = AuthenticatedDriverRouteImport.update({
+  id: '/driver',
+  path: '/driver',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -90,6 +98,18 @@ const AuthenticatedAdminMenuRoute = AuthenticatedAdminMenuRouteImport.update({
   path: '/menu',
   getParentRoute: () => AuthenticatedAdminRoute,
 } as any)
+const AuthenticatedAdminDeliverySettingsRoute =
+  AuthenticatedAdminDeliverySettingsRouteImport.update({
+    id: '/delivery-settings',
+    path: '/delivery-settings',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminDeliveriesRoute =
+  AuthenticatedAdminDeliveriesRouteImport.update({
+    id: '/deliveries',
+    path: '/deliveries',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminAppearanceRoute =
   AuthenticatedAdminAppearanceRouteImport.update({
     id: '/appearance',
@@ -106,8 +126,11 @@ export interface FileRoutesByFullPath {
   '/menu': typeof MenuRoute
   '/track': typeof TrackRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/driver': typeof AuthenticatedDriverRoute
   '/order/$number': typeof OrderNumberRoute
   '/admin/appearance': typeof AuthenticatedAdminAppearanceRoute
+  '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/admin/delivery-settings': typeof AuthenticatedAdminDeliverySettingsRoute
   '/admin/menu': typeof AuthenticatedAdminMenuRoute
   '/admin/promotions': typeof AuthenticatedAdminPromotionsRoute
   '/admin/revenue': typeof AuthenticatedAdminRevenueRoute
@@ -121,8 +144,11 @@ export interface FileRoutesByTo {
   '/menu': typeof MenuRoute
   '/track': typeof TrackRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/driver': typeof AuthenticatedDriverRoute
   '/order/$number': typeof OrderNumberRoute
   '/admin/appearance': typeof AuthenticatedAdminAppearanceRoute
+  '/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/admin/delivery-settings': typeof AuthenticatedAdminDeliverySettingsRoute
   '/admin/menu': typeof AuthenticatedAdminMenuRoute
   '/admin/promotions': typeof AuthenticatedAdminPromotionsRoute
   '/admin/revenue': typeof AuthenticatedAdminRevenueRoute
@@ -138,8 +164,11 @@ export interface FileRoutesById {
   '/menu': typeof MenuRoute
   '/track': typeof TrackRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/_authenticated/driver': typeof AuthenticatedDriverRoute
   '/order/$number': typeof OrderNumberRoute
   '/_authenticated/admin/appearance': typeof AuthenticatedAdminAppearanceRoute
+  '/_authenticated/admin/deliveries': typeof AuthenticatedAdminDeliveriesRoute
+  '/_authenticated/admin/delivery-settings': typeof AuthenticatedAdminDeliverySettingsRoute
   '/_authenticated/admin/menu': typeof AuthenticatedAdminMenuRoute
   '/_authenticated/admin/promotions': typeof AuthenticatedAdminPromotionsRoute
   '/_authenticated/admin/revenue': typeof AuthenticatedAdminRevenueRoute
@@ -155,8 +184,11 @@ export interface FileRouteTypes {
     | '/menu'
     | '/track'
     | '/admin'
+    | '/driver'
     | '/order/$number'
     | '/admin/appearance'
+    | '/admin/deliveries'
+    | '/admin/delivery-settings'
     | '/admin/menu'
     | '/admin/promotions'
     | '/admin/revenue'
@@ -170,8 +202,11 @@ export interface FileRouteTypes {
     | '/menu'
     | '/track'
     | '/admin'
+    | '/driver'
     | '/order/$number'
     | '/admin/appearance'
+    | '/admin/deliveries'
+    | '/admin/delivery-settings'
     | '/admin/menu'
     | '/admin/promotions'
     | '/admin/revenue'
@@ -186,8 +221,11 @@ export interface FileRouteTypes {
     | '/menu'
     | '/track'
     | '/_authenticated/admin'
+    | '/_authenticated/driver'
     | '/order/$number'
     | '/_authenticated/admin/appearance'
+    | '/_authenticated/admin/deliveries'
+    | '/_authenticated/admin/delivery-settings'
     | '/_authenticated/admin/menu'
     | '/_authenticated/admin/promotions'
     | '/_authenticated/admin/revenue'
@@ -270,6 +308,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderNumberRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/driver': {
+      id: '/_authenticated/driver'
+      path: '/driver'
+      fullPath: '/driver'
+      preLoaderRoute: typeof AuthenticatedDriverRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin': {
       id: '/_authenticated/admin'
       path: '/admin'
@@ -298,6 +343,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminMenuRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/delivery-settings': {
+      id: '/_authenticated/admin/delivery-settings'
+      path: '/delivery-settings'
+      fullPath: '/admin/delivery-settings'
+      preLoaderRoute: typeof AuthenticatedAdminDeliverySettingsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/deliveries': {
+      id: '/_authenticated/admin/deliveries'
+      path: '/deliveries'
+      fullPath: '/admin/deliveries'
+      preLoaderRoute: typeof AuthenticatedAdminDeliveriesRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/appearance': {
       id: '/_authenticated/admin/appearance'
       path: '/appearance'
@@ -310,6 +369,8 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAppearanceRoute: typeof AuthenticatedAdminAppearanceRoute
+  AuthenticatedAdminDeliveriesRoute: typeof AuthenticatedAdminDeliveriesRoute
+  AuthenticatedAdminDeliverySettingsRoute: typeof AuthenticatedAdminDeliverySettingsRoute
   AuthenticatedAdminMenuRoute: typeof AuthenticatedAdminMenuRoute
   AuthenticatedAdminPromotionsRoute: typeof AuthenticatedAdminPromotionsRoute
   AuthenticatedAdminRevenueRoute: typeof AuthenticatedAdminRevenueRoute
@@ -317,6 +378,9 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAppearanceRoute: AuthenticatedAdminAppearanceRoute,
+  AuthenticatedAdminDeliveriesRoute: AuthenticatedAdminDeliveriesRoute,
+  AuthenticatedAdminDeliverySettingsRoute:
+    AuthenticatedAdminDeliverySettingsRoute,
   AuthenticatedAdminMenuRoute: AuthenticatedAdminMenuRoute,
   AuthenticatedAdminPromotionsRoute: AuthenticatedAdminPromotionsRoute,
   AuthenticatedAdminRevenueRoute: AuthenticatedAdminRevenueRoute,
@@ -327,10 +391,12 @@ const AuthenticatedAdminRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
+  AuthenticatedDriverRoute: typeof AuthenticatedDriverRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
+  AuthenticatedDriverRoute: AuthenticatedDriverRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -350,13 +416,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

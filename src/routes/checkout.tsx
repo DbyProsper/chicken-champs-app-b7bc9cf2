@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Header } from "@/components/Header";
 import { useCart } from "@/lib/cart";
@@ -7,7 +7,16 @@ import { useBranch } from "@/lib/branch";
 import { formatZAR } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { MapPin } from "lucide-react";
+import { MapPin, Loader2, Navigation, AlertTriangle } from "lucide-react";
+import {
+  DEFAULT_DELIVERY_SETTINGS,
+  distanceKm,
+  fetchDeliverySettings,
+  getBrowserLocation,
+  quoteDelivery,
+  type DeliverySettings,
+  type DeliveryQuote,
+} from "@/lib/delivery";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -20,8 +29,6 @@ export const Route = createFileRoute("/checkout")({
   component: Checkout,
 });
 
-// SA mobile numbers: accept 0XXXXXXXXX (10 digits starting 0) or +27XXXXXXXXX / 27XXXXXXXXX (11 digits, second digit 6/7/8 for mobile ranges but also allow 1-8 to include landlines).
-// Normalise by stripping spaces, dashes, parentheses first.
 const saPhoneRegex = /^(?:\+?27|0)[1-8]\d{8}$/;
 
 const schema = z.object({
@@ -35,6 +42,7 @@ const schema = z.object({
     }),
   fulfillment: z.enum(["pickup", "delivery"]),
   delivery_notes: z.string().max(500).optional(),
+  delivery_address: z.string().max(500).optional(),
 });
 
 function Checkout() {
@@ -43,12 +51,20 @@ function Checkout() {
   const { active: branch } = useBranch();
   const [userId, setUserId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [settings, setSettings] = useState<DeliverySettings>(DEFAULT_DELIVERY_SETTINGS);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
   const [form, setForm] = useState({
     customer_name: "",
     customer_phone: "",
     fulfillment: "pickup" as "pickup" | "delivery",
     delivery_notes: "",
+    delivery_address: "",
   });
+
+  useEffect(() => {
+    fetchDeliverySettings().then(setSettings).catch(() => {});
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -66,12 +82,32 @@ function Checkout() {
             customer_name: f.customer_name || profile.full_name || "",
             customer_phone: f.customer_phone || profile.phone || "",
           }));
-        } else if (u.user.email) {
-          setForm((f) => ({ ...f, customer_name: f.customer_name || (u.user!.user_metadata as any)?.full_name || "" }));
         }
       }
     })();
   }, []);
+
+  const quote: DeliveryQuote | null = useMemo(() => {
+    if (form.fulfillment !== "delivery") return null;
+    if (!branch?.latitude || !branch?.longitude || !coords) return null;
+    const d = distanceKm({ lat: branch.latitude, lng: branch.longitude }, coords);
+    return quoteDelivery(d, settings);
+  }, [form.fulfillment, branch, coords, settings]);
+
+  const deliveryFee = quote?.ok ? quote.fee_cents : 0;
+  const totalCents = subtotalCents + deliveryFee;
+
+  async function useMyLocation() {
+    setLocating(true);
+    try {
+      const loc = await getBrowserLocation();
+      setCoords(loc);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Could not read your location");
+    } finally {
+      setLocating(false);
+    }
+  }
 
   if (items.length === 0 && !submitting) {
     return (
@@ -87,17 +123,19 @@ function Checkout() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!branch) {
-      toast.error("Please choose a branch first");
-      return;
-    }
+    if (!branch) return toast.error("Please choose a branch first");
     const parsed = schema.safeParse(form);
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0].message);
-      return;
+    if (!parsed.success) return toast.error(parsed.error.issues[0].message);
+
+    if (parsed.data.fulfillment === "delivery") {
+      if (!coords) return toast.error("Please share your delivery location");
+      if (!quote?.ok) return toast.error(quote?.reason ?? "Delivery unavailable");
+      if (!parsed.data.delivery_address?.trim()) return toast.error("Please add a delivery address");
     }
+
     setSubmitting(true);
     try {
+      const isDelivery = parsed.data.fulfillment === "delivery";
       const { data: orderRow, error: oErr } = await supabase
         .from("orders")
         .insert({
@@ -105,9 +143,15 @@ function Checkout() {
           customer_phone: parsed.data.customer_phone,
           fulfillment: parsed.data.fulfillment,
           delivery_notes: parsed.data.delivery_notes || null,
-          subtotal_cents: subtotalCents,
+          subtotal_cents: totalCents,
           branch_id: branch.id,
           user_id: userId,
+          delivery_address: isDelivery ? parsed.data.delivery_address : null,
+          delivery_lat: isDelivery && coords ? coords.lat : null,
+          delivery_lng: isDelivery && coords ? coords.lng : null,
+          delivery_fee_cents: isDelivery ? deliveryFee : 0,
+          distance_km: isDelivery && quote?.ok ? quote.distance_km : null,
+          delivery_status: isDelivery ? "pending" : null,
         } as never)
         .select("id, order_number")
         .single();
@@ -164,7 +208,6 @@ function Checkout() {
               type="tel"
               inputMode="tel"
               autoComplete="tel"
-              pattern="[0-9+\s\-()]{10,15}"
               value={form.customer_phone}
               onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
               required
@@ -194,14 +237,63 @@ function Checkout() {
               </button>
             ))}
           </div>
+
           {form.fulfillment === "delivery" && (
-            <textarea
-              className="mt-3 w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-              placeholder="Delivery address & notes (e.g. UFH Gate 3, Room 214)"
-              rows={3}
-              value={form.delivery_notes}
-              onChange={(e) => setForm({ ...form, delivery_notes: e.target.value })}
-            />
+            <div className="mt-3 space-y-3">
+              <input
+                className="w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+                placeholder="Delivery address (street, gate, room)"
+                value={form.delivery_address}
+                onChange={(e) => setForm({ ...form, delivery_address: e.target.value })}
+                required
+              />
+              <textarea
+                className="w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+                placeholder="Notes for the driver (optional)"
+                rows={2}
+                value={form.delivery_notes}
+                onChange={(e) => setForm({ ...form, delivery_notes: e.target.value })}
+              />
+
+              <button
+                type="button"
+                onClick={useMyLocation}
+                disabled={locating}
+                className="w-full rounded-xl border-2 border-brand/40 bg-brand/5 px-4 py-3 text-sm font-bold text-brand inline-flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {locating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4" />}
+                {coords ? "Update my location" : "Use my current location"}
+              </button>
+
+              {coords && quote && (
+                quote.ok ? (
+                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Distance</span>
+                      <span className="font-bold">{quote.distance_km.toFixed(2)} km</span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between">
+                      <span className="text-muted-foreground">Delivery fee</span>
+                      <span className="font-display text-lg text-brand">{formatZAR(quote.fee_cents)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
+                    <div>
+                      <div className="font-bold text-destructive">{quote.reason}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">You're {quote.distance_km.toFixed(2)} km away — our max delivery radius is {settings.max_radius_km} km. Please choose pickup or a closer branch.</div>
+                    </div>
+                  </div>
+                )
+              )}
+
+              {!coords && (
+                <p className="text-[11px] text-muted-foreground">
+                  Delivery fees: 0–{settings.tier1_max_km}km {formatZAR(settings.tier1_fee_cents)} · {settings.tier1_max_km}–{settings.tier2_max_km}km {formatZAR(settings.tier2_fee_cents)} · {settings.tier2_max_km}–{settings.tier3_max_km}km {formatZAR(settings.tier3_fee_cents)}
+                </p>
+              )}
+            </div>
           )}
         </section>
 
@@ -213,22 +305,30 @@ function Checkout() {
                 <span className="shrink-0 tabular-nums">{formatZAR(i.unit_price_cents * i.quantity)}</span>
               </div>
             ))}
-            <div className="mt-3 flex justify-between border-t border-border pt-3">
+            <div className="mt-2 flex justify-between text-xs">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="tabular-nums">{formatZAR(subtotalCents)}</span>
+            </div>
+            {form.fulfillment === "delivery" && (
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Delivery</span>
+                <span className="tabular-nums">{quote?.ok ? formatZAR(deliveryFee) : "—"}</span>
+              </div>
+            )}
+            <div className="mt-2 flex justify-between border-t border-border pt-3">
               <span className="font-bold">Total</span>
-              <span className="font-display text-xl text-brand">{formatZAR(subtotalCents)}</span>
+              <span className="font-display text-xl text-brand">{formatZAR(totalCents)}</span>
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Payment on collection or delivery. No card required.
-          </p>
+          <p className="mt-3 text-xs text-muted-foreground">Payment on collection or delivery. No card required.</p>
         </section>
 
         <button
           type="submit"
-          disabled={submitting || !branch}
+          disabled={submitting || !branch || (form.fulfillment === "delivery" && !quote?.ok)}
           className="w-full rounded-full bg-brand py-4 text-sm font-bold text-brand-foreground hover:bg-brand-dark disabled:opacity-60"
         >
-          {submitting ? "Placing order…" : `Place order · ${formatZAR(subtotalCents)}`}
+          {submitting ? "Placing order…" : `Place order · ${formatZAR(totalCents)}`}
         </button>
       </form>
     </div>
