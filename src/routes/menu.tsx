@@ -247,7 +247,7 @@ function Row({ item }: { item: MenuItem }) {
         </div>
         {description && (
           <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
-            <span aria-hidden className="mr-0 inline-block">{getMenuIconForItem(item.name, item.variant_label)}</span>
+            <span aria-hidden className="mr-0 inline-block">{getMenuIconForItem(item.name, item.variant_label ?? undefined)}</span>
             {description}
           </div>
         )}
