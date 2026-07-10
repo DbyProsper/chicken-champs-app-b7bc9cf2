@@ -225,6 +225,9 @@ function Admin() {
             <Link to="/admin/appearance" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Paintbrush className="h-3.5 w-3.5" /> Appearance
             </Link>
+            <Link to="/admin/deliveries" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+              <Bike className="h-3.5 w-3.5" /> Deliveries
+            </Link>
             <Link to="/admin/revenue" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <TrendingUp className="h-3.5 w-3.5" /> Revenue
             </Link>
