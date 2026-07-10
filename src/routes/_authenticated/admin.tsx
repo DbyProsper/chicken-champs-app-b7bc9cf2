@@ -259,6 +259,9 @@ function Admin() {
                 <Link to="/admin/appearance" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
                   <Paintbrush className="h-4 w-4" /> {!sidebarCollapsed && "Appearance"}
                 </Link>
+                <Link to="/admin/deliveries" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+                  <Bike className="h-4 w-4" /> {!sidebarCollapsed && "Deliveries"}
+                </Link>
                 <Link to="/admin/revenue" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
                   <TrendingUp className="h-4 w-4" /> {!sidebarCollapsed && "Revenue Overview"}
                 </Link>
