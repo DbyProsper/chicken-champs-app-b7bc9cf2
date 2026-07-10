@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.is_driver(uuid) FROM PUBLIC, anon, authenticated;

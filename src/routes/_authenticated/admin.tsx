@@ -225,6 +225,9 @@ function Admin() {
             <Link to="/admin/appearance" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <Paintbrush className="h-3.5 w-3.5" /> Appearance
             </Link>
+            <Link to="/admin/deliveries" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
+              <Bike className="h-3.5 w-3.5" /> Deliveries
+            </Link>
             <Link to="/admin/revenue" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
               <TrendingUp className="h-3.5 w-3.5" /> Revenue
             </Link>
@@ -258,6 +261,9 @@ function Admin() {
                 </Link>
                 <Link to="/admin/appearance" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
                   <Paintbrush className="h-4 w-4" /> {!sidebarCollapsed && "Appearance"}
+                </Link>
+                <Link to="/admin/deliveries" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
+                  <Bike className="h-4 w-4" /> {!sidebarCollapsed && "Deliveries"}
                 </Link>
                 <Link to="/admin/revenue" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
                   <TrendingUp className="h-4 w-4" /> {!sidebarCollapsed && "Revenue Overview"}
