@@ -6,7 +6,7 @@ export const grantRoleByEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => z.object({
     email: z.string().email().transform((value) => value.trim().toLowerCase()),
-    role: z.enum(["admin", "staff", "user"]),
+    role: z.enum(["admin", "staff", "user", "driver"]),
   }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: roleData, error: roleError } = await context.supabase.rpc("get_my_access_role");
