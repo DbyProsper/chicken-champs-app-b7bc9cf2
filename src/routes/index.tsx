@@ -129,7 +129,7 @@ function Home() {
           <img src={imageSrcFor("couple", media, "couple")} alt="Customers enjoying Champs" className="rounded-2xl aspect-square object-cover" />
           <img src={imageSrcFor("chef", media, "chef")} alt="Champs chef" className="rounded-2xl aspect-square object-cover" />
         </div>
-        <p className="mt-3 text-center font-display text-2xl text-brand">We love to please.</p>
+        <p className="mt-3 text-center font-display text-2xl text-brand">We love to serve.</p>
       </section>}
 
       {/* Store info per active branch */}
