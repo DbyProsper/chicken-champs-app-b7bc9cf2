@@ -37,9 +37,9 @@ function MenuPage() {
     const hasExtras = categories.some((c) => c.slug === "extras" || c.name.toLowerCase().includes("extra"));
 
     let nextCategories = categories;
-    const saladsCategory = { id: "salads-section", name: "Salads", slug: "salads" } as const;
-    const drinksCategory = { id: "drinks-section", name: "Drinks", slug: "drinks" } as const;
-    const extrasCategory = { id: "extras-section", name: "Extras", slug: "extras" } as const;
+    const saladsCategory = { id: "salads-section", name: "Salads", slug: "salads", sort_order: 999 };
+    const drinksCategory = { id: "drinks-section", name: "Drinks", slug: "drinks", sort_order: 999 };
+    const extrasCategory = { id: "extras-section", name: "Extras", slug: "extras", sort_order: 999 };
 
     if (!hasSalads) {
       const chipsIndex = nextCategories.findIndex((c) => c.slug === "chips" || c.name.toLowerCase().includes("chips"));
