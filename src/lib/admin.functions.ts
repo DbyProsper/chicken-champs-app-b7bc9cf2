@@ -14,24 +14,21 @@ export const grantRoleByEmail = createServerFn({ method: "POST" })
       throw new Response("Only admins can grant access", { status: 403 });
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let targetUser: { id: string; email?: string } | null = null;
+    const { data: grantData, error: grantError } = await context.supabase.rpc("grant_access_role", {
+      _email: data.email,
+      _role: data.role,
+    });
 
-    for (let page = 1; page <= 20; page += 1) {
-      const { data: usersPage, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
-      if (error) throw error;
-      targetUser = usersPage.users.find((user) => user.email?.toLowerCase() === data.email) ?? null;
-      if (targetUser || usersPage.users.length < 1000) break;
+    if (grantError) {
+      throw grantError;
     }
 
-    if (!targetUser) {
-      throw new Error("No account exists for that email yet. Ask them to sign up first, then grant access.");
-    }
-
-    const { error: upsertError } = await supabaseAdmin
-      .from("user_roles")
-      .upsert({ user_id: targetUser.id, role: data.role }, { onConflict: "user_id,role" });
-
-    if (upsertError) throw upsertError;
-    return { ok: true, user_id: targetUser.id, userId: targetUser.id, email: targetUser.email ?? data.email, role: data.role };
+    const result = Array.isArray(grantData) ? grantData[0] : grantData;
+    return {
+      ok: true,
+      user_id: result?.user_id ?? null,
+      userId: result?.user_id ?? null,
+      email: result?.email ?? data.email,
+      role: result?.role ?? data.role,
+    };
   });
