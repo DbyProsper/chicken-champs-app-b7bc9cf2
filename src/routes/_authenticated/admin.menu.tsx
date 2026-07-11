@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
+import { getMenuImageForItem } from "@/lib/menu-images";
+import { FALLBACK_MEDIA, type MediaAsset } from "@/lib/site-content";
 
 export const Route = createFileRoute("/_authenticated/admin/menu")({
   head: () => ({ meta: [{ title: "Edit Menu — Champs Admin" }, { name: "robots", content: "noindex" }] }),
@@ -19,7 +21,9 @@ type Item = {
   is_available: boolean;
   category_id: string;
   sort_order: number;
+  image_url: string | null;
 };
+
 type Cat = { id: string; name: string; slug: string; sort_order: number };
 
 function MenuAdmin() {
