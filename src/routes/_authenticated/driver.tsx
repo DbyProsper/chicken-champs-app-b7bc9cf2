@@ -58,31 +58,7 @@ function DriverPage() {
     }
 
     const { data: existingDriver } = await supabase.from("drivers").select("id, name, status").eq("user_id", uid).maybeSingle();
-    let driverRecord = existingDriver as { id: string; name: string; status: string } | null;
-
-    if (!driverRecord) {
-      const { data: roleRows } = await supabase.from("user_roles").select("role").eq("user_id", uid);
-      const hasDriverRole = (roleRows ?? []).some((row: { role?: string | null }) => row.role === "driver");
-
-      if (hasDriverRole) {
-        const profileName = userData.user?.user_metadata?.full_name ?? userData.user?.user_metadata?.name ?? userData.user?.email?.split("@")[0] ?? "Driver";
-        const { data: createdDriver, error: createError } = await supabase
-          .from("drivers")
-          .insert({
-            name: profileName,
-            phone: "",
-            user_id: uid,
-            branch_id: null,
-            status: "offline",
-          } as never)
-          .select("id, name, status")
-          .maybeSingle();
-
-        if (!createError && createdDriver) {
-          driverRecord = createdDriver as { id: string; name: string; status: string };
-        }
-      }
-    }
+    const driverRecord = existingDriver as { id: string; name: string; status: string } | null;
 
     if (!driverRecord) {
       setNotDriver(true);
