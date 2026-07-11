@@ -29,19 +29,24 @@ type Cat = { id: string; name: string; slug: string; sort_order: number };
 function MenuAdmin() {
   const [items, setItems] = useState<Item[]>([]);
   const [cats, setCats] = useState<Cat[]>([]);
+  const [media, setMedia] = useState<MediaAsset[]>(FALLBACK_MEDIA);
   const [dirty, setDirty] = useState<Record<string, Partial<Item>>>({});
   const [newItem, setNewItem] = useState<Record<string, { name: string; variant: string; price: string }>>({});
   const [newCat, setNewCat] = useState("");
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
 
   async function load() {
-    const [i, c] = await Promise.all([
+    const [i, c, m] = await Promise.all([
       supabase.from("menu_items").select("*").order("sort_order"),
       supabase.from("categories").select("*").order("sort_order"),
+      supabase.from("media_assets").select("*").order("sort_order"),
     ]);
     setItems((i.data as Item[]) ?? []);
     setCats((c.data as Cat[]) ?? []);
+    if (m.data && m.data.length > 0) setMedia(m.data as MediaAsset[]);
   }
   useEffect(() => { load(); }, []);
+
 
   function edit(id: string, patch: Partial<Item>) {
     setDirty((d) => ({ ...d, [id]: { ...d[id], ...patch } }));
