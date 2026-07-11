@@ -124,22 +124,30 @@ function AppearanceAdmin() {
 
           <section className="rounded-2xl border bg-card p-4">
             <h2 className="font-display text-2xl text-brand inline-flex items-center gap-2"><Image className="h-5 w-5" /> Media Library</h2>
+            <p className="mt-1 text-xs text-muted-foreground">Images referenced here can be picked as the hero, homepage cards, or per-menu-item photos. Paste a path from <code>/images/champs/</code> or a full URL.</p>
             <div className="mt-3 space-y-3">
-              {media.map((asset) => (
-                <div key={asset.id} className="grid gap-2 rounded-xl border p-3 sm:grid-cols-[84px_1fr_auto]">
-                  <img src={asset.src} alt={asset.alt} className="h-20 w-20 rounded-lg object-cover" />
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <input className="input" value={asset.title} onChange={(e) => patchAsset(asset.id, { title: e.target.value })} />
-                    <input className="input" value={asset.image_key} onChange={(e) => patchAsset(asset.id, { image_key: e.target.value })} />
-                    <input className="input sm:col-span-2" value={asset.src} onChange={(e) => patchAsset(asset.id, { src: e.target.value })} />
-                    <input className="input" value={asset.alt} onChange={(e) => patchAsset(asset.id, { alt: e.target.value })} />
-                    <input className="input" value={asset.usage} onChange={(e) => patchAsset(asset.id, { usage: e.target.value })} />
+              {media.map((asset) => {
+                const isHero = asset.image_key === settings.hero_image_key;
+                return (
+                  <div key={asset.id} className="grid gap-2 rounded-xl border p-3 sm:grid-cols-[84px_1fr_auto]">
+                    <div className="relative h-20 w-20">
+                      <img src={asset.src} alt={asset.alt} className="h-20 w-20 rounded-lg object-cover" />
+                      {isHero && <span className="absolute -top-1 -right-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] font-bold uppercase text-brand-foreground">Hero</span>}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input className="input" value={asset.title} onChange={(e) => patchAsset(asset.id, { title: e.target.value })} placeholder="Title" />
+                      <input className="input" value={asset.image_key} onChange={(e) => patchAsset(asset.id, { image_key: e.target.value })} placeholder="Key" />
+                      <input className="input sm:col-span-2" value={asset.src} onChange={(e) => patchAsset(asset.id, { src: e.target.value })} placeholder="Image path or URL" />
+                      <input className="input" value={asset.alt} onChange={(e) => patchAsset(asset.id, { alt: e.target.value })} placeholder="Alt text" />
+                      <input className="input" value={asset.usage} onChange={(e) => patchAsset(asset.id, { usage: e.target.value })} placeholder="Usage tag" />
+                    </div>
+                    <button onClick={() => saveAsset(asset)} className="self-start rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-brand-foreground">Save</button>
                   </div>
-                  <button onClick={() => saveAsset(asset)} className="self-start rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-brand-foreground">Save</button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
+
         </div>
 
         <aside className="space-y-4">

@@ -11,7 +11,9 @@ export type MenuItem = {
   price_cents: number;
   is_available: boolean;
   sort_order: number;
+  image_url: string | null;
 };
+
 
 export const menuQuery = queryOptions({
   queryKey: ["menu"],

@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
+import { getMenuImageForItem } from "@/lib/menu-images";
+import { FALLBACK_MEDIA, type MediaAsset } from "@/lib/site-content";
 
 export const Route = createFileRoute("/_authenticated/admin/menu")({
   head: () => ({ meta: [{ title: "Edit Menu — Champs Admin" }, { name: "robots", content: "noindex" }] }),
@@ -19,25 +21,32 @@ type Item = {
   is_available: boolean;
   category_id: string;
   sort_order: number;
+  image_url: string | null;
 };
+
 type Cat = { id: string; name: string; slug: string; sort_order: number };
 
 function MenuAdmin() {
   const [items, setItems] = useState<Item[]>([]);
   const [cats, setCats] = useState<Cat[]>([]);
+  const [media, setMedia] = useState<MediaAsset[]>(FALLBACK_MEDIA);
   const [dirty, setDirty] = useState<Record<string, Partial<Item>>>({});
   const [newItem, setNewItem] = useState<Record<string, { name: string; variant: string; price: string }>>({});
   const [newCat, setNewCat] = useState("");
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
 
   async function load() {
-    const [i, c] = await Promise.all([
+    const [i, c, m] = await Promise.all([
       supabase.from("menu_items").select("*").order("sort_order"),
       supabase.from("categories").select("*").order("sort_order"),
+      supabase.from("media_assets").select("*").order("sort_order"),
     ]);
     setItems((i.data as Item[]) ?? []);
     setCats((c.data as Cat[]) ?? []);
+    if (m.data && m.data.length > 0) setMedia(m.data as MediaAsset[]);
   }
   useEffect(() => { load(); }, []);
+
 
   function edit(id: string, patch: Partial<Item>) {
     setDirty((d) => ({ ...d, [id]: { ...d[id], ...patch } }));
@@ -119,8 +128,21 @@ function MenuAdmin() {
                 {catItems.map((it) => {
                   const patch = dirty[it.id] ?? {};
                   const cur = { ...it, ...patch };
+                  const auto = getMenuImageForItem(cur.name, cur.variant_label);
+                  const imgSrc = cur.image_url || auto.src;
                   return (
                     <div key={it.id} className="flex flex-wrap items-center gap-2 p-3">
+                      <button
+                        type="button"
+                        onClick={() => setPickerFor(it.id)}
+                        className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border bg-muted"
+                        title="Change image"
+                      >
+                        <img src={imgSrc} alt="" className="h-full w-full object-cover" />
+                        <span className="absolute inset-x-0 bottom-0 bg-black/55 text-[9px] font-bold uppercase text-white text-center py-0.5">
+                          {cur.image_url ? "Custom" : "Auto"}
+                        </span>
+                      </button>
                       <input
                         className="flex-1 min-w-40 rounded-md border px-2 py-1.5 text-sm"
                         value={cur.name}
@@ -153,9 +175,19 @@ function MenuAdmin() {
                       <button onClick={() => removeItem(it.id)} className="ml-auto grid h-7 w-7 place-items-center rounded-full text-muted-foreground hover:text-brand hover:bg-brand/10" aria-label="Delete">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
+                      {pickerFor === it.id && (
+                        <ImagePicker
+                          media={media}
+                          currentUrl={cur.image_url}
+                          autoSrc={auto.src}
+                          onClose={() => setPickerFor(null)}
+                          onPick={(url) => { edit(it.id, { image_url: url }); setPickerFor(null); }}
+                        />
+                      )}
                     </div>
                   );
                 })}
+
                 {/* Add new item to category */}
                 <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/40">
                   <input
@@ -189,3 +221,59 @@ function MenuAdmin() {
     </div>
   );
 }
+
+function ImagePicker({
+  media,
+  currentUrl,
+  autoSrc,
+  onClose,
+  onPick,
+}: {
+  media: MediaAsset[];
+  currentUrl: string | null;
+  autoSrc: string;
+  onClose: () => void;
+  onPick: (url: string | null) => void;
+}) {
+  const [url, setUrl] = useState(currentUrl ?? "");
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl bg-background p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="font-display text-xl text-brand inline-flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Choose image</div>
+          <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-full hover:bg-muted"><X className="h-4 w-4" /></button>
+        </div>
+        <p className="text-xs text-muted-foreground">Pick from the media library, paste a URL, or reset to the automatic image.</p>
+
+        <div className="mt-3 grid max-h-64 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
+          <button onClick={() => onPick(null)} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted">
+            <img src={autoSrc} alt="Auto" className="h-full w-full object-cover opacity-70" />
+            <span className="absolute inset-x-0 bottom-0 bg-black/60 text-[10px] font-bold text-white text-center py-0.5">Auto (default)</span>
+          </button>
+          {media.map((m) => (
+            <button key={m.id} onClick={() => onPick(m.src)} className="group relative aspect-square overflow-hidden rounded-lg border">
+              <img src={m.src} alt={m.alt} className="h-full w-full object-cover" />
+              <span className="absolute inset-x-0 bottom-0 bg-black/60 text-[10px] font-bold text-white text-center py-0.5 truncate">{m.title}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            className="flex-1 rounded-md border px-3 py-2 text-sm"
+            placeholder="https://... or /images/champs/file.jpg"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <button
+            onClick={() => onPick(url.trim() || null)}
+            className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-brand-foreground"
+          >
+            Use URL
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
