@@ -221,3 +221,59 @@ function MenuAdmin() {
     </div>
   );
 }
+
+function ImagePicker({
+  media,
+  currentUrl,
+  autoSrc,
+  onClose,
+  onPick,
+}: {
+  media: MediaAsset[];
+  currentUrl: string | null;
+  autoSrc: string;
+  onClose: () => void;
+  onPick: (url: string | null) => void;
+}) {
+  const [url, setUrl] = useState(currentUrl ?? "");
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl bg-background p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="font-display text-xl text-brand inline-flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Choose image</div>
+          <button onClick={onClose} className="grid h-7 w-7 place-items-center rounded-full hover:bg-muted"><X className="h-4 w-4" /></button>
+        </div>
+        <p className="text-xs text-muted-foreground">Pick from the media library, paste a URL, or reset to the automatic image.</p>
+
+        <div className="mt-3 grid max-h-64 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
+          <button onClick={() => onPick(null)} className="group relative aspect-square overflow-hidden rounded-lg border bg-muted">
+            <img src={autoSrc} alt="Auto" className="h-full w-full object-cover opacity-70" />
+            <span className="absolute inset-x-0 bottom-0 bg-black/60 text-[10px] font-bold text-white text-center py-0.5">Auto (default)</span>
+          </button>
+          {media.map((m) => (
+            <button key={m.id} onClick={() => onPick(m.src)} className="group relative aspect-square overflow-hidden rounded-lg border">
+              <img src={m.src} alt={m.alt} className="h-full w-full object-cover" />
+              <span className="absolute inset-x-0 bottom-0 bg-black/60 text-[10px] font-bold text-white text-center py-0.5 truncate">{m.title}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            className="flex-1 rounded-md border px-3 py-2 text-sm"
+            placeholder="https://... or /images/champs/file.jpg"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <button
+            onClick={() => onPick(url.trim() || null)}
+            className="rounded-full bg-brand px-4 py-2 text-xs font-bold text-brand-foreground"
+          >
+            Use URL
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
