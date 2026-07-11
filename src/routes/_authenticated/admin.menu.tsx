@@ -128,8 +128,21 @@ function MenuAdmin() {
                 {catItems.map((it) => {
                   const patch = dirty[it.id] ?? {};
                   const cur = { ...it, ...patch };
+                  const auto = getMenuImageForItem(cur.name, cur.variant_label);
+                  const imgSrc = cur.image_url || auto.src;
                   return (
                     <div key={it.id} className="flex flex-wrap items-center gap-2 p-3">
+                      <button
+                        type="button"
+                        onClick={() => setPickerFor(it.id)}
+                        className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border bg-muted"
+                        title="Change image"
+                      >
+                        <img src={imgSrc} alt="" className="h-full w-full object-cover" />
+                        <span className="absolute inset-x-0 bottom-0 bg-black/55 text-[9px] font-bold uppercase text-white text-center py-0.5">
+                          {cur.image_url ? "Custom" : "Auto"}
+                        </span>
+                      </button>
                       <input
                         className="flex-1 min-w-40 rounded-md border px-2 py-1.5 text-sm"
                         value={cur.name}
@@ -162,9 +175,19 @@ function MenuAdmin() {
                       <button onClick={() => removeItem(it.id)} className="ml-auto grid h-7 w-7 place-items-center rounded-full text-muted-foreground hover:text-brand hover:bg-brand/10" aria-label="Delete">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
+                      {pickerFor === it.id && (
+                        <ImagePicker
+                          media={media}
+                          currentUrl={cur.image_url}
+                          autoSrc={auto.src}
+                          onClose={() => setPickerFor(null)}
+                          onPick={(url) => { edit(it.id, { image_url: url }); setPickerFor(null); }}
+                        />
+                      )}
                     </div>
                   );
                 })}
+
                 {/* Add new item to category */}
                 <div className="flex flex-wrap items-center gap-2 p-3 bg-muted/40">
                   <input
