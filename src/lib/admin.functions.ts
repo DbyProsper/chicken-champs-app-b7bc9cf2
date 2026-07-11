@@ -4,7 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const grantRoleByEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: unknown) => z.object({
+  .inputValidator((input: unknown) => z.object({
     email: z.string().email().transform((value) => value.trim().toLowerCase()),
     role: z.enum(["admin", "staff", "user", "driver"]),
   }).parse(input))
