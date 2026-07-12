@@ -26,7 +26,7 @@ BEGIN
 
   INSERT INTO public.user_roles (user_id, role)
   VALUES (target_user_id, _role)
-  ON CONFLICT (user_id, role) DO NOTHING;
+  ON CONFLICT DO NOTHING;
 
   RETURN QUERY
   SELECT target_user_id, target_email, _role;
