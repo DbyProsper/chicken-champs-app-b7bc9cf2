@@ -19,6 +19,10 @@ type Delivery = {
   distance_km: number | null;
   delivery_fee_cents: number;
   created_at: string;
+  batch_id: string | null;
+  queue_position: number | null;
+  estimated_eta_min: number | null;
+  estimated_eta_max: number | null;
 };
 
 type Order = {
@@ -70,8 +74,9 @@ function DriverPage() {
 
     const { data: dels } = await supabase
       .from("deliveries")
-      .select("id, order_id, driver_id, status, distance_km, delivery_fee_cents, created_at")
+      .select("id, order_id, driver_id, status, distance_km, delivery_fee_cents, created_at, batch_id, queue_position, estimated_eta_min, estimated_eta_max")
       .neq("status", "delivered")
+      .order("queue_position", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false });
     const list = (dels ?? []) as Delivery[];
     setDeliveries(list);
@@ -132,14 +137,21 @@ function DriverPage() {
 
   async function accept(d: Delivery) {
     if (!driver) return;
-    await updateDelivery(d.id, { driver_id: driver.id, status: "accepted" });
+    // Assign a queue position at the end of this driver's active queue
+    const currentPositions = deliveries
+      .filter((x) => x.driver_id === driver.id && x.status !== "delivered")
+      .map((x) => x.queue_position ?? 0);
+    const nextPos = (currentPositions.length ? Math.max(...currentPositions) : 0) + 1;
+    await updateDelivery(d.id, { driver_id: driver.id, status: "accepted", queue_position: nextPos });
     toast.success("Order accepted");
   }
   async function nextStatus(d: Delivery) {
     const flow: DeliveryStatus[] = ["accepted", "picked_up", "on_the_way", "delivered"];
     const idx = flow.indexOf(d.status as DeliveryStatus);
     const next = idx === -1 ? "picked_up" : flow[Math.min(idx + 1, flow.length - 1)];
-    await updateDelivery(d.id, { status: next });
+    const patch: Partial<Delivery> = { status: next };
+    if (next === "delivered") (patch as any).actual_delivery_time = new Date().toISOString();
+    await updateDelivery(d.id, patch);
     // sync order fulfillment status for customer view
     if (next === "on_the_way") {
       await supabase.from("orders").update({ status: "out_for_delivery" as any }).eq("id", d.order_id);
@@ -224,7 +236,12 @@ function DriverPage() {
             <div key={d.id} className="rounded-2xl border bg-card p-4 shadow-sm space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-display text-lg text-brand truncate">{o?.customer_name ?? "Customer"}</div>
+                  <div className="font-display text-lg text-brand truncate flex items-center gap-2">
+                    {d.queue_position != null && (
+                      <span className="rounded-full bg-brand text-brand-foreground text-[10px] font-bold px-2 py-0.5">#{d.queue_position}</span>
+                    )}
+                    {o?.customer_name ?? "Customer"}
+                  </div>
                   <div className="text-xs text-muted-foreground">#{o?.order_number} · {b?.name ?? "Branch"}</div>
                 </div>
                 <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-brand">{DELIVERY_STATUS_LABEL[d.status] ?? d.status}</span>

@@ -23,12 +23,14 @@ export const grantRoleByEmail = createServerFn({ method: "POST" })
       throw grantError;
     }
 
-    const result = Array.isArray(grantData) ? grantData[0] : grantData;
+    const result = (Array.isArray(grantData) ? grantData[0] : grantData) as
+      | { out_user_id?: string; out_email?: string; out_role?: string }
+      | null;
     return {
       ok: true,
-      user_id: result?.user_id ?? null,
-      userId: result?.user_id ?? null,
-      email: result?.email ?? data.email,
-      role: result?.role ?? data.role,
+      user_id: result?.out_user_id ?? null,
+      userId: result?.out_user_id ?? null,
+      email: result?.out_email ?? data.email,
+      role: result?.out_role ?? data.role,
     };
   });

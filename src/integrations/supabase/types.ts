@@ -94,36 +94,58 @@ export type Database = {
       }
       deliveries: {
         Row: {
+          actual_delivery_time: string | null
+          batch_id: string | null
           created_at: string
           delivery_fee_cents: number
           distance_km: number | null
           driver_id: string | null
+          estimated_eta_max: number | null
+          estimated_eta_min: number | null
           id: string
           order_id: string
+          queue_position: number | null
           status: string
           updated_at: string
         }
         Insert: {
+          actual_delivery_time?: string | null
+          batch_id?: string | null
           created_at?: string
           delivery_fee_cents?: number
           distance_km?: number | null
           driver_id?: string | null
+          estimated_eta_max?: number | null
+          estimated_eta_min?: number | null
           id?: string
           order_id: string
+          queue_position?: number | null
           status?: string
           updated_at?: string
         }
         Update: {
+          actual_delivery_time?: string | null
+          batch_id?: string | null
           created_at?: string
           delivery_fee_cents?: number
           distance_km?: number | null
           driver_id?: string | null
+          estimated_eta_max?: number | null
+          estimated_eta_min?: number | null
           id?: string
           order_id?: string
+          queue_position?: number | null
           status?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "deliveries_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "deliveries_driver_id_fkey"
             columns: ["driver_id"]
@@ -140,10 +162,50 @@ export type Database = {
           },
         ]
       }
+      delivery_batches: {
+        Row: {
+          created_at: string
+          driver_id: string | null
+          id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_batches_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_settings: {
         Row: {
+          avg_stop_min: number
+          base_prep_min: number
           id: string
           max_radius_km: number
+          max_wait_min: number
+          normal_capacity_max: number
+          normal_capacity_min: number
+          peak_capacity_max: number
+          peak_capacity_min: number
+          peak_threshold: number
           tier1_fee_cents: number
           tier1_max_km: number
           tier2_fee_cents: number
@@ -153,8 +215,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          avg_stop_min?: number
+          base_prep_min?: number
           id?: string
           max_radius_km?: number
+          max_wait_min?: number
+          normal_capacity_max?: number
+          normal_capacity_min?: number
+          peak_capacity_max?: number
+          peak_capacity_min?: number
+          peak_threshold?: number
           tier1_fee_cents?: number
           tier1_max_km?: number
           tier2_fee_cents?: number
@@ -164,8 +234,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          avg_stop_min?: number
+          base_prep_min?: number
           id?: string
           max_radius_km?: number
+          max_wait_min?: number
+          normal_capacity_max?: number
+          normal_capacity_min?: number
+          peak_capacity_max?: number
+          peak_capacity_min?: number
+          peak_threshold?: number
           tier1_fee_cents?: number
           tier1_max_km?: number
           tier2_fee_cents?: number
@@ -654,6 +732,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_driver_profile_for_user: {
+        Args: { _user_id: string }
+        Returns: {
+          id: string
+          name: string
+          status: string
+        }[]
+      }
       get_my_access_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
@@ -661,9 +747,9 @@ export type Database = {
       grant_access_role: {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: {
-          email: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
+          out_email: string
+          out_role: Database["public"]["Enums"]["app_role"]
+          out_user_id: string
         }[]
       }
       has_role: {

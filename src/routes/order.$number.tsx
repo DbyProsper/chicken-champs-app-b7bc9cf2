@@ -21,13 +21,25 @@ const orderQuery = (number: string) =>
         .maybeSingle();
       if (error) throw error;
       if (!order) return null;
-      const [{ data: itemsData }, { data: branch }] = await Promise.all([
+      const [{ data: itemsData }, { data: branch }, { data: delivery }] = await Promise.all([
         supabase.from("order_items").select("item_name, unit_price_cents, quantity").eq("order_id", order.id),
         order.branch_id
           ? supabase.from("branches").select("name, address, city, phone").eq("id", order.branch_id).maybeSingle()
           : Promise.resolve({ data: null }),
+        order.fulfillment === "delivery"
+          ? supabase
+              .from("deliveries")
+              .select("queue_position, estimated_eta_min, estimated_eta_max, driver_id, status")
+              .eq("order_id", order.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
-      return { order, items: itemsData ?? [], branch };
+      let aheadCount = 0;
+      if (delivery && (delivery as any).driver_id && (delivery as any).queue_position) {
+        const pos = (delivery as any).queue_position as number;
+        aheadCount = Math.max(0, pos - 1);
+      }
+      return { order, items: itemsData ?? [], branch, delivery, aheadCount };
     },
     staleTime: 5_000,
   });
@@ -97,11 +109,12 @@ function OrderPage() {
   }
 
   if (!data) return <div className="p-6 text-sm">Order not found.</div>;
-  const { order, items, branch } = data;
+  const { order, items, branch, delivery, aheadCount } = data;
   const currentIdx = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
 
   const waText = orderStatusMessage(order.order_number, order.status, order.customer_name);
   const verifyPayload = `champs:${order.order_number}:${order.pickup_pin}`;
+  const deliveryEta = delivery as { estimated_eta_min?: number | null; estimated_eta_max?: number | null; queue_position?: number | null; driver_id?: string | null } | null;
 
   return (
     <div className="min-h-screen pb-10">
@@ -114,6 +127,15 @@ function OrderPage() {
           <div className="mt-4 inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider">
             {STATUS_LABEL[order.status]}
           </div>
+          {order.fulfillment === "delivery" && deliveryEta?.estimated_eta_min != null && deliveryEta?.estimated_eta_max != null && (
+            <div className="mt-3 text-sm">
+              <span className="opacity-80">Estimated delivery</span>{" "}
+              <span className="font-bold">{deliveryEta.estimated_eta_min}–{deliveryEta.estimated_eta_max} min</span>
+            </div>
+          )}
+          {order.fulfillment === "delivery" && deliveryEta?.driver_id && aheadCount > 0 && (
+            <div className="mt-1 text-xs opacity-90">Driver has {aheadCount} {aheadCount === 1 ? "delivery" : "deliveries"} before yours</div>
+          )}
         </div>
 
         {/* Progress bar */}

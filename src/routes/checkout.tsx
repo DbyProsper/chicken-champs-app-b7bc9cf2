@@ -12,8 +12,11 @@ import {
   DEFAULT_DELIVERY_SETTINGS,
   distanceKm,
   fetchDeliverySettings,
+  fetchActiveDeliveryCount,
   getBrowserLocation,
   quoteDelivery,
+  computeMode,
+  computeEtaRange,
   type DeliverySettings,
   type DeliveryQuote,
 } from "@/lib/delivery";
@@ -54,6 +57,7 @@ function Checkout() {
   const [settings, setSettings] = useState<DeliverySettings>(DEFAULT_DELIVERY_SETTINGS);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
   const [form, setForm] = useState({
     customer_name: "",
     customer_phone: "",
@@ -64,6 +68,7 @@ function Checkout() {
 
   useEffect(() => {
     fetchDeliverySettings().then(setSettings).catch(() => {});
+    fetchActiveDeliveryCount().then(setActiveCount).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -267,16 +272,30 @@ function Checkout() {
 
               {coords && quote && (
                 quote.ok ? (
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Distance</span>
-                      <span className="font-bold">{quote.distance_km.toFixed(2)} km</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="text-muted-foreground">Delivery fee</span>
-                      <span className="font-display text-lg text-brand">{formatZAR(quote.fee_cents)}</span>
-                    </div>
-                  </div>
+                  (() => {
+                    const mode = computeMode(activeCount, settings);
+                    const eta = computeEtaRange(1, settings, mode);
+                    return (
+                      <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Distance</span>
+                          <span className="font-bold">{quote.distance_km.toFixed(2)} km</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-muted-foreground">Delivery fee</span>
+                          <span className="font-display text-lg text-brand">{formatZAR(quote.fee_cents)}</span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between border-t border-emerald-600/20 pt-2">
+                          <span className="text-muted-foreground">Estimated delivery</span>
+                          <span className="font-bold">{eta.min}–{eta.max} min</span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground flex items-center justify-between">
+                          <span>{mode === "peak" ? "Peak demand — we're batching a bit slower to keep quality up." : "Orders are grouped for faster delivery and efficiency."}</span>
+                          <span className={"ml-2 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase " + (mode === "peak" ? "bg-orange-100 text-orange-700" : "bg-emerald-100 text-emerald-700")}>{mode}</span>
+                        </div>
+                      </div>
+                    );
+                  })()
                 ) : (
                   <div className="rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-destructive mt-0.5" />
