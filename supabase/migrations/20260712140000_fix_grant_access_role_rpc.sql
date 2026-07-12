@@ -1,5 +1,6 @@
 -- Fix grant_access_role RPC to use private.has_role
-CREATE OR REPLACE FUNCTION public.grant_access_role(_email text, _role public.app_role)
+DROP FUNCTION IF EXISTS public.grant_access_role(text, public.app_role);
+CREATE FUNCTION public.grant_access_role(_email text, _role public.app_role)
 RETURNS TABLE (user_id uuid, email text, role public.app_role)
 LANGUAGE plpgsql
 SECURITY DEFINER
