@@ -60,6 +60,7 @@ function Checkout() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [activeCount, setActiveCount] = useState(0);
+  const [driversOnline, setDriversOnline] = useState<number | null>(null);
   const [form, setForm] = useState({
     customer_name: "",
     customer_phone: "",
@@ -71,6 +72,14 @@ function Checkout() {
   useEffect(() => {
     fetchDeliverySettings().then(setSettings).catch(() => {});
     fetchActiveDeliveryCount().then(setActiveCount).catch(() => {});
+    fetchOnlineDriverCount().then(setDriversOnline).catch(() => setDriversOnline(0));
+    const ch = supabase
+      .channel("checkout-drivers")
+      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, () => {
+        fetchOnlineDriverCount().then(setDriversOnline).catch(() => {});
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, []);
 
   useEffect(() => {
