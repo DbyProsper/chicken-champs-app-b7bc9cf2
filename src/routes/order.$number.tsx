@@ -1,13 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, MessageCircle, Bell, ShieldCheck } from "lucide-react";
+import { CheckCircle2, MessageCircle, Bell, ShieldCheck, Landmark, Upload, Copy } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { Header } from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { fireNotification, notificationPermission, requestNotificationPermission } from "@/lib/notifications";
 import { waLink, orderStatusMessage } from "@/lib/whatsapp";
+import { PAYMENT_STATUS_LABEL, triggerAutoAssign } from "@/lib/delivery";
 import { toast } from "sonner";
 
 const orderQuery = (number: string) =>
@@ -16,7 +17,7 @@ const orderQuery = (number: string) =>
     queryFn: async () => {
       const { data: order, error } = await supabase
         .from("orders")
-        .select("id, order_number, customer_name, customer_phone, fulfillment, delivery_notes, subtotal_cents, status, created_at, pickup_pin, branch_id, verified_at")
+        .select("id, order_number, customer_name, customer_phone, fulfillment, delivery_notes, subtotal_cents, delivery_fee_cents, status, created_at, pickup_pin, branch_id, verified_at, user_id")
         .eq("order_number", number)
         .maybeSingle();
       if (error) throw error;
@@ -27,19 +28,24 @@ const orderQuery = (number: string) =>
           ? supabase.from("branches").select("name, address, city, phone").eq("id", order.branch_id).maybeSingle()
           : Promise.resolve({ data: null }),
         order.fulfillment === "delivery"
-          ? supabase
-              .from("deliveries")
-              .select("queue_position, estimated_eta_min, estimated_eta_max, driver_id, status")
+          ? (supabase.from("deliveries") as any)
+              .select("id, queue_position, estimated_eta_min, estimated_eta_max, driver_id, status, delivery_fee_cents, payment_status, payment_reference, proof_of_payment_url")
               .eq("order_id", order.id)
               .maybeSingle()
           : Promise.resolve({ data: null }),
       ]);
+      let driver: { name: string; phone: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder: string | null } | null = null;
       let aheadCount = 0;
-      if (delivery && (delivery as any).driver_id && (delivery as any).queue_position) {
-        const pos = (delivery as any).queue_position as number;
-        aheadCount = Math.max(0, pos - 1);
+      const d: any = delivery;
+      if (d?.driver_id) {
+        const { data: dr } = await (supabase.from("drivers") as any)
+          .select("name, phone, bank_name, bank_account_number, bank_account_holder")
+          .eq("id", d.driver_id)
+          .maybeSingle();
+        driver = dr;
+        if (d.queue_position) aheadCount = Math.max(0, (d.queue_position as number) - 1);
       }
-      return { order, items: itemsData ?? [], branch, delivery, aheadCount };
+      return { order, items: itemsData ?? [], branch, delivery: d, driver, aheadCount };
     },
     staleTime: 5_000,
   });
@@ -57,15 +63,24 @@ export const Route = createFileRoute("/order/$number")({
   component: OrderPage,
 });
 
-const STATUS_LABEL: Record<string, string> = {
+const PICKUP_STATUS_LABEL: Record<string, string> = {
   pending: "Received",
   preparing: "Preparing",
-  out_for_delivery: "Out for delivery",
-  completed: "Completed",
+  ready: "Ready for collection",
+  completed: "Collected",
   cancelled: "Cancelled",
 };
+const DELIVERY_STATUS_LABEL: Record<string, string> = {
+  pending: "Received",
+  preparing: "Preparing",
+  ready: "Done preparing",
+  out_for_delivery: "Out for delivery",
+  completed: "Delivered",
+  cancelled: "Cancelled",
+};
+const PICKUP_STEPS = ["pending", "preparing", "ready", "completed"] as const;
+const DELIVERY_STEPS = ["pending", "preparing", "out_for_delivery", "completed"] as const;
 
-const STATUS_STEPS = ["pending", "preparing", "out_for_delivery", "completed"] as const;
 
 function OrderPage() {
   const { number } = Route.useParams();
