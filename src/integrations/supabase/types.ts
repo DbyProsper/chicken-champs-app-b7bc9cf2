@@ -747,9 +747,9 @@ export type Database = {
       grant_access_role: {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: {
-          out_email: string
-          out_role: Database["public"]["Enums"]["app_role"]
-          out_user_id: string
+          email: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
         }[]
       }
       has_role: {
