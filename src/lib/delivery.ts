@@ -147,3 +147,22 @@ export async function fetchActiveDeliveryCount(): Promise<number> {
   return count ?? 0;
 }
 
+export async function fetchOnlineDriverCount(): Promise<number> {
+  const { data, error } = await supabase.rpc("online_drivers_count");
+  if (error) return 0;
+  return Number(data ?? 0);
+}
+
+export async function triggerAutoAssign(): Promise<number> {
+  const { data, error } = await supabase.rpc("auto_assign_pending_deliveries");
+  if (error) return 0;
+  return Number(data ?? 0);
+}
+
+export const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  not_paid: "Not paid",
+  pending: "Awaiting driver confirmation",
+  paid: "Paid",
+};
+
+
