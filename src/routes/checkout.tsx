@@ -238,30 +238,44 @@ function Checkout() {
 
         <section>
           <h2 className="font-display text-xl mb-2">Order type</h2>
+          {driversOnline === 0 && (
+            <div className="mb-2 rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs flex items-start gap-2">
+              <Bike className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+              <span>Delivery currently unavailable — no drivers online. You can still order for pickup.</span>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
-            {(["pickup", "delivery"] as const).map((v) => (
-              <button
-                type="button"
-                key={v}
-                onClick={() => setForm({ ...form, fulfillment: v })}
-                className={
-                  "rounded-xl border-2 px-4 py-4 text-sm font-bold uppercase tracking-wider transition-colors " +
-                  (form.fulfillment === v ? "border-brand bg-brand text-brand-foreground" : "border-border bg-card text-muted-foreground")
-                }
-              >
-                {v}
-              </button>
-            ))}
+            {(["pickup", "delivery"] as const).map((v) => {
+              const disabled = v === "delivery" && driversOnline === 0;
+              return (
+                <button
+                  type="button"
+                  key={v}
+                  disabled={disabled}
+                  onClick={() => !disabled && setForm({ ...form, fulfillment: v })}
+                  className={
+                    "rounded-xl border-2 px-4 py-4 text-sm font-bold uppercase tracking-wider transition-colors " +
+                    (form.fulfillment === v ? "border-brand bg-brand text-brand-foreground" : "border-border bg-card text-muted-foreground") +
+                    (disabled ? " opacity-40 cursor-not-allowed" : "")
+                  }
+                >
+                  {v}
+                </button>
+              );
+            })}
           </div>
 
           {form.fulfillment === "delivery" && (
             <div className="mt-3 space-y-3">
-              <input
-                className="w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                placeholder="Delivery address (street, gate, room)"
+              <AddressAutocomplete
                 value={form.delivery_address}
-                onChange={(e) => setForm({ ...form, delivery_address: e.target.value })}
-                required
+                onChange={(v) => setForm((f) => ({ ...f, delivery_address: v }))}
+                onSelect={({ address, lat, lng }) => {
+                  setForm((f) => ({ ...f, delivery_address: address }));
+                  setCoords({ lat, lng });
+                }}
+                placeholder="Delivery address (start typing to search)"
+                bias={branch?.latitude && branch?.longitude ? { lat: branch.latitude, lng: branch.longitude } : undefined}
               />
               <textarea
                 className="w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
@@ -270,6 +284,8 @@ function Checkout() {
                 value={form.delivery_notes}
                 onChange={(e) => setForm({ ...form, delivery_notes: e.target.value })}
               />
+
+
 
               <button
                 type="button"
