@@ -7,12 +7,13 @@ import { useBranch } from "@/lib/branch";
 import { formatZAR } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { MapPin, Loader2, Navigation, AlertTriangle } from "lucide-react";
+import { MapPin, Loader2, Navigation, AlertTriangle, Bike } from "lucide-react";
 import {
   DEFAULT_DELIVERY_SETTINGS,
   distanceKm,
   fetchDeliverySettings,
   fetchActiveDeliveryCount,
+  fetchOnlineDriverCount,
   getBrowserLocation,
   quoteDelivery,
   computeMode,
@@ -20,6 +21,7 @@ import {
   type DeliverySettings,
   type DeliveryQuote,
 } from "@/lib/delivery";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
