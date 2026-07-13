@@ -174,7 +174,7 @@ function OrderPage() {
 
   if (!data) return <div className="p-6 text-sm">Order not found.</div>;
   const { order, items, branch, delivery, driver, aheadCount } = data;
-  const currentIdx = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
+  const currentIdx = (STATUS_STEPS as readonly string[]).indexOf(order.status);
   const waText = orderStatusMessage(order.order_number, order.status, order.customer_name);
   const verifyPayload = `champs:${order.order_number}:${order.pickup_pin}`;
   const d: any = delivery;
