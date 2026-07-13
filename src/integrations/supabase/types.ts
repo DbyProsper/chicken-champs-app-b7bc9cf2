@@ -95,7 +95,9 @@ export type Database = {
       deliveries: {
         Row: {
           actual_delivery_time: string | null
+          assign_deadline_at: string | null
           batch_id: string | null
+          broadcast_at: string | null
           created_at: string
           delivery_fee_cents: number
           distance_km: number | null
@@ -104,13 +106,18 @@ export type Database = {
           estimated_eta_min: number | null
           id: string
           order_id: string
+          payment_reference: string | null
+          payment_status: string
+          proof_of_payment_url: string | null
           queue_position: number | null
           status: string
           updated_at: string
         }
         Insert: {
           actual_delivery_time?: string | null
+          assign_deadline_at?: string | null
           batch_id?: string | null
+          broadcast_at?: string | null
           created_at?: string
           delivery_fee_cents?: number
           distance_km?: number | null
@@ -119,13 +126,18 @@ export type Database = {
           estimated_eta_min?: number | null
           id?: string
           order_id: string
+          payment_reference?: string | null
+          payment_status?: string
+          proof_of_payment_url?: string | null
           queue_position?: number | null
           status?: string
           updated_at?: string
         }
         Update: {
           actual_delivery_time?: string | null
+          assign_deadline_at?: string | null
           batch_id?: string | null
+          broadcast_at?: string | null
           created_at?: string
           delivery_fee_cents?: number
           distance_km?: number | null
@@ -134,6 +146,9 @@ export type Database = {
           estimated_eta_min?: number | null
           id?: string
           order_id?: string
+          payment_reference?: string | null
+          payment_status?: string
+          proof_of_payment_url?: string | null
           queue_position?: number | null
           status?: string
           updated_at?: string
@@ -288,6 +303,9 @@ export type Database = {
       }
       drivers: {
         Row: {
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
           branch_id: string | null
           created_at: string
           id: string
@@ -298,6 +316,9 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
           branch_id?: string | null
           created_at?: string
           id?: string
@@ -308,6 +329,9 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
           branch_id?: string | null
           created_at?: string
           id?: string
@@ -732,6 +756,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_assign_pending_deliveries: { Args: never; Returns: number }
       get_driver_profile_for_user: {
         Args: { _user_id: string }
         Returns: {
@@ -762,6 +787,7 @@ export type Database = {
       is_champs_owner_email: { Args: never; Returns: boolean }
       is_driver: { Args: { _user_id: string }; Returns: boolean }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      online_drivers_count: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "staff" | "user" | "driver"
@@ -772,6 +798,7 @@ export type Database = {
         | "out_for_delivery"
         | "completed"
         | "cancelled"
+        | "ready"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -907,6 +934,7 @@ export const Constants = {
         "out_for_delivery",
         "completed",
         "cancelled",
+        "ready",
       ],
     },
   },
