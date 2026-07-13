@@ -173,6 +173,20 @@ function Checkout() {
         .single();
       if (oErr) throw oErr;
 
+      if (isDelivery) {
+        // Seed the delivery row with a 20s broadcast window before auto-assignment
+        const now = new Date();
+        const deadline = new Date(now.getTime() + 20_000);
+        await (supabase.from("deliveries") as any).upsert({
+          order_id: orderRow.id,
+          distance_km: quote?.ok ? quote.distance_km : null,
+          delivery_fee_cents: deliveryFee,
+          status: "pending",
+          broadcast_at: now.toISOString(),
+          assign_deadline_at: deadline.toISOString(),
+        }, { onConflict: "order_id" });
+      }
+
       const { error: iErr } = await supabase.from("order_items").insert(
         items.map((i) => ({
           order_id: orderRow.id,
