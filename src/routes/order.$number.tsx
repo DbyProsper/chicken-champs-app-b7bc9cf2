@@ -87,34 +87,46 @@ function OrderPage() {
   const { data, refetch } = useSuspenseQuery(orderQuery(number));
   const prevStatus = useRef<string | null>(null);
   const [permission, setPermission] = useState(notificationPermission());
+  const [payRef, setPayRef] = useState("");
+  const [proofUploading, setProofUploading] = useState(false);
+  const [payBusy, setPayBusy] = useState(false);
 
-  // Realtime subscription for this order → refetch + browser notification on status change
+  const isDelivery = data?.order.fulfillment === "delivery";
+  const STATUS_LABEL = isDelivery ? DELIVERY_STATUS_LABEL : PICKUP_STATUS_LABEL;
+  const STATUS_STEPS = isDelivery ? DELIVERY_STEPS : PICKUP_STEPS;
+
+  // Realtime: order + delivery
   useEffect(() => {
     if (!data?.order.id) return;
     prevStatus.current = data.order.status;
     const ch = supabase
       .channel(`order-${data.order.id}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${data.order.id}` },
-        (payload) => {
-          const newStatus = (payload.new as any).status as string;
-          if (prevStatus.current && newStatus !== prevStatus.current) {
-            const label = STATUS_LABEL[newStatus] ?? newStatus;
-            toast.success(`Order update: ${label}`);
-            fireNotification(
-              `Champs Chicken — ${label}`,
-              `Order ${data.order.order_number} · ${label}`,
-              `order-${data.order.id}`,
-            );
-            prevStatus.current = newStatus;
-          }
-          refetch();
-        },
-      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${data.order.id}` }, (payload) => {
+        const newStatus = (payload.new as any).status as string;
+        if (prevStatus.current && newStatus !== prevStatus.current) {
+          const label = STATUS_LABEL[newStatus] ?? newStatus;
+          toast.success(`Order update: ${label}`);
+          fireNotification(`Champs Chicken — ${label}`, `Order ${data.order.order_number} · ${label}`, `order-${data.order.id}`);
+          prevStatus.current = newStatus;
+        }
+        refetch();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "deliveries", filter: `order_id=eq.${data.order.id}` }, () => refetch())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [data?.order.id, data?.order.order_number, refetch]);
+  }, [data?.order.id, data?.order.order_number, refetch, STATUS_LABEL]);
+
+  // If delivery and still awaiting driver, poll auto-assign every 10s
+  useEffect(() => {
+    if (!isDelivery) return;
+    const d: any = data?.delivery;
+    if (!d || d.driver_id) return;
+    const t = window.setInterval(async () => {
+      await triggerAutoAssign();
+      refetch();
+    }, 10_000);
+    return () => window.clearInterval(t);
+  }, [isDelivery, data?.delivery, refetch]);
 
   async function enableNotifications() {
     const p = await requestNotificationPermission();
@@ -123,13 +135,49 @@ function OrderPage() {
     else if (p === "denied") toast.error("Notifications blocked in browser settings");
   }
 
-  if (!data) return <div className="p-6 text-sm">Order not found.</div>;
-  const { order, items, branch, delivery, aheadCount } = data;
-  const currentIdx = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
+  async function markIPaid() {
+    if (!data?.delivery?.id) return;
+    if (!payRef.trim()) return toast.error("Please enter the reference you used");
+    setPayBusy(true);
+    const { error } = await (supabase.from("deliveries") as any)
+      .update({ payment_status: "pending", payment_reference: payRef.trim() })
+      .eq("id", data.delivery.id);
+    setPayBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success("Thanks — your driver will confirm receipt shortly.");
+    refetch();
+  }
 
+  async function uploadProof(file: File) {
+    if (!data?.order?.id || !data?.delivery?.id) return;
+    setProofUploading(true);
+    try {
+      const path = `${data.order.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await (supabase.from("deliveries") as any)
+        .update({ proof_of_payment_url: path })
+        .eq("id", data.delivery.id);
+      if (dbErr) throw dbErr;
+      toast.success("Proof uploaded");
+      refetch();
+    } catch (e: any) {
+      toast.error(e.message ?? "Upload failed");
+    } finally {
+      setProofUploading(false);
+    }
+  }
+
+  function copyText(text: string) {
+    try { navigator.clipboard.writeText(text); toast.success("Copied"); } catch {}
+  }
+
+  if (!data) return <div className="p-6 text-sm">Order not found.</div>;
+  const { order, items, branch, delivery, driver, aheadCount } = data;
+  const currentIdx = STATUS_STEPS.indexOf(order.status as (typeof STATUS_STEPS)[number]);
   const waText = orderStatusMessage(order.order_number, order.status, order.customer_name);
   const verifyPayload = `champs:${order.order_number}:${order.pickup_pin}`;
-  const deliveryEta = delivery as { estimated_eta_min?: number | null; estimated_eta_max?: number | null; queue_position?: number | null; driver_id?: string | null } | null;
+  const d: any = delivery;
 
   return (
     <div className="min-h-screen pb-10">
@@ -140,44 +188,95 @@ function OrderPage() {
           <div className="mt-3 text-xs uppercase tracking-widest opacity-80">Order number</div>
           <div className="font-display text-4xl">{order.order_number}</div>
           <div className="mt-4 inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider">
-            {STATUS_LABEL[order.status]}
+            {STATUS_LABEL[order.status] ?? order.status}
           </div>
-          {order.fulfillment === "delivery" && deliveryEta?.estimated_eta_min != null && deliveryEta?.estimated_eta_max != null && (
+          {isDelivery && d?.estimated_eta_min != null && d?.estimated_eta_max != null && (
             <div className="mt-3 text-sm">
               <span className="opacity-80">Estimated delivery</span>{" "}
-              <span className="font-bold">{deliveryEta.estimated_eta_min}–{deliveryEta.estimated_eta_max} min</span>
+              <span className="font-bold">{d.estimated_eta_min}–{d.estimated_eta_max} min</span>
             </div>
           )}
-          {order.fulfillment === "delivery" && deliveryEta?.driver_id && aheadCount > 0 && (
+          {isDelivery && d?.driver_id && aheadCount > 0 && (
             <div className="mt-1 text-xs opacity-90">Driver has {aheadCount} {aheadCount === 1 ? "delivery" : "deliveries"} before yours</div>
+          )}
+          {isDelivery && !d?.driver_id && (
+            <div className="mt-3 text-xs opacity-90">Finding a driver for you…</div>
           )}
         </div>
 
-        {/* Progress bar */}
         {order.status !== "cancelled" && (
           <div className="mt-4 rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center justify-between">
               {STATUS_STEPS.map((s, i) => (
                 <div key={s} className="flex-1 flex items-center">
-                  <div className={`h-8 w-8 rounded-full grid place-items-center text-[10px] font-bold ${i <= currentIdx ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>
-                    {i + 1}
-                  </div>
-                  {i < STATUS_STEPS.length - 1 && (
-                    <div className={`flex-1 h-1 mx-1 rounded ${i < currentIdx ? "bg-brand" : "bg-muted"}`} />
-                  )}
+                  <div className={`h-8 w-8 rounded-full grid place-items-center text-[10px] font-bold ${i <= currentIdx ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>{i + 1}</div>
+                  {i < STATUS_STEPS.length - 1 && (<div className={`flex-1 h-1 mx-1 rounded ${i < currentIdx ? "bg-brand" : "bg-muted"}`} />)}
                 </div>
               ))}
             </div>
             <div className="mt-2 grid grid-cols-4 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-center">
-              <span>Received</span><span>Prep</span><span>{order.fulfillment === "delivery" ? "Delivery" : "Ready"}</span><span>Done</span>
+              {isDelivery
+                ? (<><span>Received</span><span>Preparing</span><span>Out</span><span>Delivered</span></>)
+                : (<><span>Received</span><span>Preparing</span><span>Ready</span><span>Collected</span></>)}
             </div>
+          </div>
+        )}
+
+        {/* Delivery: driver + payment card */}
+        {isDelivery && driver && (
+          <div className="mt-4 rounded-2xl border-2 border-brand/30 bg-card p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Your driver</div>
+                <div className="font-display text-lg text-brand">{driver.name}</div>
+                <a href={`tel:${driver.phone}`} className="text-xs text-muted-foreground underline">{driver.phone}</a>
+              </div>
+              <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-bold uppercase text-brand">{d?.status ?? "assigned"}</span>
+            </div>
+
+            {(driver.bank_name || driver.bank_account_number) && (
+              <div className="rounded-xl bg-muted/40 p-3 text-sm">
+                <div className="flex items-center gap-2 font-bold text-brand"><Landmark className="h-4 w-4" /> Pay your driver directly</div>
+                <div className="mt-2 space-y-1 text-xs">
+                  {driver.bank_account_holder && <Row label="Account holder" value={driver.bank_account_holder} onCopy={() => copyText(driver.bank_account_holder!)} />}
+                  {driver.bank_name && <Row label="Bank" value={driver.bank_name} onCopy={() => copyText(driver.bank_name!)} />}
+                  {driver.bank_account_number && <Row label="Account number" value={driver.bank_account_number} onCopy={() => copyText(driver.bank_account_number!)} />}
+                  <Row label="Amount" value={formatZAR(d?.delivery_fee_cents ?? order.delivery_fee_cents ?? 0)} onCopy={() => copyText(String((d?.delivery_fee_cents ?? order.delivery_fee_cents ?? 0) / 100))} />
+                  <Row label="Reference" value={`${order.order_number} ${order.customer_name}`} onCopy={() => copyText(`${order.order_number} ${order.customer_name}`)} />
+                </div>
+                <div className="mt-3 rounded-lg bg-background border p-2 text-[11px] text-muted-foreground">Use your order number as the reference so the driver can match your payment.</div>
+
+                {d?.payment_status === "paid" ? (
+                  <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-green-600 px-3 py-1 text-[10px] font-bold text-white uppercase"><CheckCircle2 className="h-3 w-3" /> Paid</div>
+                ) : d?.payment_status === "pending" ? (
+                  <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 p-2 text-xs">Awaiting driver confirmation of payment.</div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    <input
+                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                      placeholder="Payment reference (e.g. your name / order number)"
+                      value={payRef}
+                      onChange={(e) => setPayRef(e.target.value)}
+                    />
+                    <button onClick={markIPaid} disabled={payBusy} className="w-full rounded-lg bg-brand py-2.5 text-sm font-bold text-brand-foreground disabled:opacity-60">
+                      {payBusy ? "Saving…" : "I have paid"}
+                    </button>
+                    <label className="w-full inline-flex items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold cursor-pointer">
+                      <Upload className="h-3.5 w-3.5" /> {proofUploading ? "Uploading…" : "Attach proof of payment (optional)"}
+                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => e.target.files?.[0] && uploadProof(e.target.files[0])} />
+                    </label>
+                  </div>
+                )}
+                <div className="mt-2 text-[11px] text-muted-foreground">Payment status: <span className="font-semibold text-foreground">{PAYMENT_STATUS_LABEL[d?.payment_status ?? "not_paid"]}</span></div>
+              </div>
+            )}
           </div>
         )}
 
         {/* PIN + QR verification card */}
         <div className="mt-4 rounded-2xl border-2 border-brand/40 bg-brand/5 p-5">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand">
-            <ShieldCheck className="h-4 w-4" /> Show this on {order.fulfillment === "delivery" ? "delivery" : "collection"}
+            <ShieldCheck className="h-4 w-4" /> Show this on {isDelivery ? "delivery" : "collection"}
           </div>
           <div className="mt-3 flex items-center gap-4">
             <div className="flex-1">
@@ -196,22 +295,13 @@ function OrderPage() {
           )}
         </div>
 
-        {/* Notifications */}
         {permission === "default" && (
-          <button
-            onClick={enableNotifications}
-            className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-brand/40 bg-card py-3 text-sm font-semibold text-brand hover:bg-brand/5"
-          >
+          <button onClick={enableNotifications} className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl border border-brand/40 bg-card py-3 text-sm font-semibold text-brand hover:bg-brand/5">
             <Bell className="h-4 w-4" /> Enable notifications for order updates
           </button>
         )}
 
-        <a
-          href={waLink(branch?.phone, waText)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 flex items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-bold text-white hover:opacity-90"
-        >
+        <a href={waLink(branch?.phone, waText)} target="_blank" rel="noopener noreferrer" className="mt-3 flex items-center justify-center gap-2 rounded-full bg-[#25D366] py-3 text-sm font-bold text-white hover:opacity-90">
           <MessageCircle className="h-4 w-4" /> Send confirmation on WhatsApp
         </a>
 
@@ -248,10 +338,20 @@ function OrderPage() {
           </div>
         </div>
 
-        <Link to="/menu" className="mt-6 block text-center text-sm font-bold text-brand">
-          ← Back to menu
-        </Link>
+        <Link to="/menu" className="mt-6 block text-center text-sm font-bold text-brand">← Back to menu</Link>
       </div>
     </div>
   );
 }
+
+function Row({ label, value, onCopy }: { label: string; value: string; onCopy: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <button type="button" onClick={onCopy} className="inline-flex items-center gap-1 font-semibold hover:text-brand">
+        {value} <Copy className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
