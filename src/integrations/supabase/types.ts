@@ -269,6 +269,65 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_applications: {
+        Row: {
+          admin_notes: string | null
+          bank_account_holder: string | null
+          bank_account_number: string | null
+          bank_name: string | null
+          branch_id: string | null
+          created_at: string
+          id: string
+          name: string
+          phone: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          phone: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          bank_account_holder?: string | null
+          bank_account_number?: string | null
+          bank_name?: string | null
+          branch_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_applications_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_locations: {
         Row: {
           driver_id: string
@@ -756,12 +815,47 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_upsert_driver_by_email: {
+        Args: {
+          _bank_account_holder?: string
+          _bank_account_number?: string
+          _bank_name?: string
+          _branch_id?: string
+          _email: string
+          _name: string
+          _phone: string
+        }
+        Returns: {
+          out_driver_id: string
+          out_email: string
+          out_user_id: string
+        }[]
+      }
+      approve_driver_application: {
+        Args: { _application_id: string }
+        Returns: {
+          out_driver_id: string
+          out_user_id: string
+        }[]
+      }
       auto_assign_pending_deliveries: { Args: never; Returns: number }
+      confirm_delivery_payment: {
+        Args: { _delivery_id: string }
+        Returns: {
+          out_delivery_id: string
+          out_payment_status: string
+        }[]
+      }
       get_driver_profile_for_user: {
         Args: { _user_id: string }
         Returns: {
+          bank_account_holder: string
+          bank_account_number: string
+          bank_name: string
+          branch_id: string
           id: string
           name: string
+          phone: string
           status: string
         }[]
       }
@@ -772,9 +866,9 @@ export type Database = {
       grant_access_role: {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: {
-          email: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
+          out_email: string
+          out_role: Database["public"]["Enums"]["app_role"]
+          out_user_id: string
         }[]
       }
       has_role: {
@@ -788,6 +882,38 @@ export type Database = {
       is_driver: { Args: { _user_id: string }; Returns: boolean }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       online_drivers_count: { Args: never; Returns: number }
+      reject_driver_application: {
+        Args: { _admin_notes?: string; _application_id: string }
+        Returns: {
+          out_application_id: string
+          out_status: string
+        }[]
+      }
+      request_driver_application: {
+        Args: {
+          _bank_account_holder?: string
+          _bank_account_number?: string
+          _bank_name?: string
+          _branch_id?: string
+          _name: string
+          _phone: string
+        }
+        Returns: {
+          out_application_id: string
+          out_status: string
+        }[]
+      }
+      submit_delivery_payment: {
+        Args: {
+          _delivery_id: string
+          _payment_reference: string
+          _proof_path?: string
+        }
+        Returns: {
+          out_delivery_id: string
+          out_payment_status: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "staff" | "user" | "driver"

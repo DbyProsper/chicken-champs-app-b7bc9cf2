@@ -1,12 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type AccessRole = "admin" | "staff" | null;
+export type AccessRole = "admin" | "staff" | "driver" | null;
 
 function normalizeRole(value: unknown): AccessRole {
   if (typeof value !== "string") return null;
   const role = value.toLowerCase();
   if (role === "admin") return "admin";
   if (role === "staff") return "staff";
+  if (role === "driver") return "driver";
   return null;
 }
 
@@ -92,6 +93,7 @@ export async function getAccessRole(userId?: string | null): Promise<AccessRole>
 
     if (databaseRole === "admin" || found.includes("admin") || metadataRole === "admin" || metadataRoleFromArray === "admin" || isAdminByMetadata || isAdminByEmail) return "admin";
     if (databaseRole === "staff" || found.includes("staff") || metadataRole === "staff" || metadataRoleFromArray === "staff") return "staff";
+    if (databaseRole === "driver" || found.includes("driver") || metadataRole === "driver" || metadataRoleFromArray === "driver") return "driver";
 
     if (userError || attempt < 3) {
       await wait(250);

@@ -32,7 +32,7 @@ function Auth() {
       if (data.user) {
         const role = await getAccessRole(data.user.id);
         const isStaff = role === "admin" || role === "staff";
-        nav({ to: isStaff ? "/admin" : "/account" });
+        nav({ to: isStaff ? "/admin" : role === "driver" ? "/driver" : "/account" });
         return;
       }
       setChecking(false);
@@ -62,7 +62,7 @@ function Auth() {
       if (u.user) {
         const role = await getAccessRole(u.user.id);
         const isStaff = role === "admin" || role === "staff";
-        nav({ to: isStaff ? "/admin" : "/account" });
+        nav({ to: isStaff ? "/admin" : role === "driver" ? "/driver" : "/account" });
       }
     } catch (err: any) {
       toast.error(err.message ?? "Auth failed");

@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bike, Phone, MapPin, Loader2, LogOut, RefreshCw, Package, Navigation as NavIcon } from "lucide-react";
+import { Bike, Phone, MapPin, Loader2, LogOut, RefreshCw, Package, Navigation as NavIcon, CheckCircle2, Landmark } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
 import { DELIVERY_STATUS_LABEL, type DeliveryStatus } from "@/lib/delivery";
+import { confirmDeliveryPayment } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/driver")({
   head: () => ({ meta: [{ title: "Driver — Champs Chicken" }, { name: "robots", content: "noindex" }] }),
@@ -23,6 +24,10 @@ type Delivery = {
   queue_position: number | null;
   estimated_eta_min: number | null;
   estimated_eta_max: number | null;
+  actual_delivery_time?: string | null;
+  payment_status?: string;
+  payment_reference?: string | null;
+  proof_of_payment_url?: string | null;
 };
 
 type Order = {
@@ -43,7 +48,7 @@ type ItemRow = { order_id: string; item_name: string; quantity: number };
 
 function DriverPage() {
   const [loading, setLoading] = useState(true);
-  const [driver, setDriver] = useState<{ id: string; name: string; status: string } | null>(null);
+  const [driver, setDriver] = useState<{ id: string; name: string; phone?: string; status: string; bank_name?: string | null; bank_account_number?: string | null; bank_account_holder?: string | null } | null>(null);
   const [notDriver, setNotDriver] = useState(false);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [orders, setOrders] = useState<Record<string, Order>>({});
@@ -61,8 +66,8 @@ function DriverPage() {
       return;
     }
 
-    const { data: existingDriver } = await supabase.from("drivers").select("id, name, status").eq("user_id", uid).maybeSingle();
-    const driverRecord = existingDriver as { id: string; name: string; status: string } | null;
+    const { data: existingDriver } = await supabase.from("drivers").select("id, name, phone, status, bank_name, bank_account_number, bank_account_holder").eq("user_id", uid).maybeSingle();
+    const driverRecord = existingDriver as { id: string; name: string; phone?: string; status: string; bank_name?: string | null; bank_account_number?: string | null; bank_account_holder?: string | null } | null;
 
     if (!driverRecord) {
       setNotDriver(true);
@@ -74,8 +79,7 @@ function DriverPage() {
 
     const { data: dels } = await supabase
       .from("deliveries")
-      .select("id, order_id, driver_id, status, distance_km, delivery_fee_cents, created_at, batch_id, queue_position, estimated_eta_min, estimated_eta_max")
-      .neq("status", "delivered")
+      .select("id, order_id, driver_id, status, distance_km, delivery_fee_cents, created_at, batch_id, queue_position, estimated_eta_min, estimated_eta_max, actual_delivery_time, payment_status, payment_reference, proof_of_payment_url")
       .order("queue_position", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: false });
     const list = (dels ?? []) as Delivery[];
@@ -168,6 +172,16 @@ function DriverPage() {
     setDriver({ ...driver, status: nextStatus });
   }
 
+  async function confirmPayment(id: string) {
+    try {
+      await confirmDeliveryPayment({ data: { deliveryId: id } });
+      toast.success("Payment confirmed");
+      load();
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not confirm payment");
+    }
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     window.location.href = "/";
@@ -195,6 +209,8 @@ function DriverPage() {
   }
 
   const list = tab === "available" ? available : mine;
+  const deliveredMine = mine.filter((d) => d.status === "delivered");
+  const earningsCents = deliveredMine.reduce((sum, d) => sum + (d.payment_status === "paid" ? d.delivery_fee_cents : 0), 0);
 
   return (
     <div className="min-h-screen bg-muted/40 pb-20">
@@ -220,6 +236,17 @@ function DriverPage() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4 space-y-3">
+        {tab === "mine" && (
+          <div className="rounded-2xl border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Confirmed earnings</div>
+                <div className="font-display text-3xl text-brand">{formatZAR(earningsCents)}</div>
+              </div>
+              <Landmark className="h-8 w-8 text-brand" />
+            </div>
+          </div>
+        )}
         {list.length === 0 && (
           <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
             {tab === "available" ? "No orders waiting for a driver right now." : "You have no active deliveries."}
@@ -286,9 +313,16 @@ function DriverPage() {
               {tab === "available" ? (
                 <button onClick={() => accept(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">Accept order</button>
               ) : d.status !== "delivered" ? (
-                <button onClick={() => nextStatus(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">
-                  {d.status === "accepted" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Advance"}
-                </button>
+                <div className="space-y-2">
+                  {d.payment_status === "pending" && (
+                    <button onClick={() => confirmPayment(d.id)} className="w-full rounded-xl border border-emerald-600 px-3 py-3 text-sm font-bold text-emerald-700 inline-flex items-center justify-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" /> Confirm payment received
+                    </button>
+                  )}
+                  <button onClick={() => nextStatus(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">
+                    {d.status === "accepted" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Advance"}
+                  </button>
+                </div>
               ) : null}
             </div>
           );
