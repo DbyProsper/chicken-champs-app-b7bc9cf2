@@ -839,6 +839,13 @@ export type Database = {
         }[]
       }
       auto_assign_pending_deliveries: { Args: never; Returns: number }
+      confirm_delivery_payment: {
+        Args: { _delivery_id: string }
+        Returns: {
+          out_delivery_id: string
+          out_payment_status: string
+        }[]
+      }
       get_driver_profile_for_user: {
         Args: { _user_id: string }
         Returns: {
@@ -894,6 +901,17 @@ export type Database = {
         Returns: {
           out_application_id: string
           out_status: string
+        }[]
+      }
+      submit_delivery_payment: {
+        Args: {
+          _delivery_id: string
+          _payment_reference: string
+          _proof_path?: string
+        }
+        Returns: {
+          out_delivery_id: string
+          out_payment_status: string
         }[]
       }
     }
