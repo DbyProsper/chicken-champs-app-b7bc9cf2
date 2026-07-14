@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { LogOut, RefreshCw, Bike, Package, CheckCircle2, ChefHat, Clock, XCircle, Utensils, Sparkles, ShieldCheck, MessageCircle, Paintbrush, UserPlus, PanelLeftClose, PanelLeftOpen, TrendingUp } from "lucide-react";
+import { LogOut, RefreshCw, Bike, Package, CheckCircle2, ChefHat, Clock, XCircle, Utensils, Sparkles, ShieldCheck, MessageCircle, Paintbrush, PanelLeftClose, PanelLeftOpen, TrendingUp } from "lucide-react";
 import { Header } from "@/components/Header";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
@@ -24,7 +24,7 @@ type Order = {
   fulfillment: "pickup" | "delivery";
   delivery_notes: string | null;
   subtotal_cents: number;
-  status: "pending" | "preparing" | "out_for_delivery" | "completed" | "cancelled";
+  status: "pending" | "preparing" | "ready" | "out_for_delivery" | "completed" | "cancelled";
   created_at: string;
   branch_id: string;
   pickup_pin: string;
@@ -32,10 +32,12 @@ type Order = {
 };
 type ItemRow = { order_id: string; item_name: string; quantity: number; unit_price_cents: number };
 
-const STATUS_FLOW: Order["status"][] = ["pending", "preparing", "out_for_delivery", "completed"];
+const PICKUP_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "completed"];
+const DELIVERY_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "out_for_delivery", "completed"];
 const STATUS_META = {
   pending: { label: "New", icon: Clock, color: "bg-amber-500" },
   preparing: { label: "Preparing", icon: ChefHat, color: "bg-blue-500" },
+  ready: { label: "Ready", icon: Package, color: "bg-emerald-500" },
   out_for_delivery: { label: "Out for delivery", icon: Bike, color: "bg-purple-500" },
   completed: { label: "Completed", icon: CheckCircle2, color: "bg-green-600" },
   cancelled: { label: "Cancelled", icon: XCircle, color: "bg-neutral-500" },
@@ -203,7 +205,7 @@ function Admin() {
   const stats = {
     new: filtered.filter((o) => o.status === "pending").length,
     prep: filtered.filter((o) => o.status === "preparing").length,
-    out: filtered.filter((o) => o.status === "out_for_delivery").length,
+    out: filtered.filter((o) => o.status === "out_for_delivery" || o.status === "ready").length,
     revenue: todayRevenueOrders.reduce((s, o) => s + o.subtotal_cents, 0),
   };
 
@@ -320,7 +322,7 @@ function Admin() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {(["active", "pending", "preparing", "out_for_delivery", "completed", "all"] as const).map((f) => (
+          {(["active", "pending", "preparing", "ready", "out_for_delivery", "completed", "all"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -367,8 +369,9 @@ function OrderCard({
 }) {
   const meta = STATUS_META[o.status];
   const StatusIcon = meta.icon;
-  const currentIdx = STATUS_FLOW.indexOf(o.status);
-  const next = currentIdx >= 0 && currentIdx < STATUS_FLOW.length - 1 ? STATUS_FLOW[currentIdx + 1] : null;
+  const statusFlow = o.fulfillment === "pickup" ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
+  const currentIdx = statusFlow.indexOf(o.status);
+  const next = currentIdx >= 0 && currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null;
   const [pinInput, setPinInput] = useState("");
   const [showVerify, setShowVerify] = useState(false);
 
@@ -410,7 +413,7 @@ function OrderCard({
       </ul>
 
       {/* PIN verify */}
-      {!o.verified_at && (o.status === "out_for_delivery" || o.status === "preparing") && (
+      {!o.verified_at && (o.status === "out_for_delivery" || o.status === "ready") && (
         <div className="mt-3 rounded-xl bg-brand/5 border border-brand/20 p-3">
           {!showVerify ? (
             <button onClick={() => setShowVerify(true)} className="w-full inline-flex items-center justify-center gap-2 text-xs font-bold text-brand">

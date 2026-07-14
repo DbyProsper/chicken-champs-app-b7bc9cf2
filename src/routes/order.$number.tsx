@@ -10,6 +10,7 @@ import { fireNotification, notificationPermission, requestNotificationPermission
 import { waLink, orderStatusMessage } from "@/lib/whatsapp";
 import { PAYMENT_STATUS_LABEL, triggerAutoAssign } from "@/lib/delivery";
 import { toast } from "sonner";
+import { submitDeliveryPayment } from "@/lib/admin.functions";
 
 const orderQuery = (number: string) =>
   queryOptions({
@@ -139,13 +140,15 @@ function OrderPage() {
     if (!data?.delivery?.id) return;
     if (!payRef.trim()) return toast.error("Please enter the reference you used");
     setPayBusy(true);
-    const { error } = await (supabase.from("deliveries") as any)
-      .update({ payment_status: "pending", payment_reference: payRef.trim() })
-      .eq("id", data.delivery.id);
-    setPayBusy(false);
-    if (error) return toast.error(error.message);
-    toast.success("Thanks — your driver will confirm receipt shortly.");
-    refetch();
+    try {
+      await submitDeliveryPayment({ data: { deliveryId: data.delivery.id, reference: payRef.trim() } });
+      toast.success("Thanks — your driver will confirm receipt shortly.");
+      refetch();
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not submit payment");
+    } finally {
+      setPayBusy(false);
+    }
   }
 
   async function uploadProof(file: File) {
@@ -155,10 +158,7 @@ function OrderPage() {
       const path = `${data.order.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
       const { error: upErr } = await supabase.storage.from("payment-proofs").upload(path, file, { upsert: true });
       if (upErr) throw upErr;
-      const { error: dbErr } = await (supabase.from("deliveries") as any)
-        .update({ proof_of_payment_url: path })
-        .eq("id", data.delivery.id);
-      if (dbErr) throw dbErr;
+      await submitDeliveryPayment({ data: { deliveryId: data.delivery.id, reference: payRef.trim() || `${data.order.order_number} ${data.order.customer_name}`, proofPath: path } });
       toast.success("Proof uploaded");
       refetch();
     } catch (e: any) {
