@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, Package, Repeat, Sparkles, ShieldCheck, ChevronRight } from "lucide-react";
+import { LogOut, Package, Repeat, Sparkles, ShieldCheck, ChevronRight, Bike } from "lucide-react";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { useCart } from "@/lib/cart";
 import { getAccessRole } from "@/lib/roles";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
+import { requestDriverApplication } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -24,6 +25,10 @@ function Account() {
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ full_name: string | null; phone: string | null } | null>(null);
   const [isStaff, setIsStaff] = useState(false);
+  const [isDriver, setIsDriver] = useState(false);
+  const [driverApplication, setDriverApplication] = useState<{ status: string; admin_notes: string | null } | null>(null);
+  const [driverForm, setDriverForm] = useState({ name: "", phone: "", bank_name: "", bank_account_number: "", bank_account_holder: "" });
+  const [driverBusy, setDriverBusy] = useState(false);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -40,6 +45,10 @@ function Account() {
       ]);
       setProfile(p);
       setIsStaff(role === "admin" || role === "staff");
+      setIsDriver(role === "driver");
+      setDriverForm((f) => ({ ...f, name: p?.full_name || "", phone: p?.phone || "" }));
+      const { data: app } = await supabase.from("driver_applications").select("status, admin_notes").eq("user_id", u.user.id).maybeSingle();
+      setDriverApplication(app);
       setChecking(false);
     })();
   }, [nav]);
@@ -94,6 +103,21 @@ function Account() {
     }
   }
 
+  async function requestDriverAccess(e: React.FormEvent) {
+    e.preventDefault();
+    if (!driverForm.name.trim() || !driverForm.phone.trim()) return toast.error("Name and phone are required");
+    setDriverBusy(true);
+    try {
+      await requestDriverApplication({ data: { name: driverForm.name, phone: driverForm.phone, bankName: driverForm.bank_name, bankAccountNumber: driverForm.bank_account_number, bankAccountHolder: driverForm.bank_account_holder } });
+      toast.success("Driver request sent");
+      setDriverApplication({ status: "pending", admin_notes: null });
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not send driver request");
+    } finally {
+      setDriverBusy(false);
+    }
+  }
+
   if (checking) return <div className="p-8 text-sm text-muted-foreground">…</div>;
 
   return (
@@ -112,11 +136,40 @@ function Account() {
                 <ShieldCheck className="h-3.5 w-3.5" /> Admin
               </Link>
             )}
+            {isDriver && (
+              <Link to="/driver" className="inline-flex items-center gap-1.5 rounded-full bg-white/20 backdrop-blur px-3 py-1.5 text-xs font-bold hover:bg-white/30">
+                <Bike className="h-3.5 w-3.5" /> Driver
+              </Link>
+            )}
             <button onClick={signOut} className="inline-flex items-center gap-1.5 rounded-full bg-white/20 backdrop-blur px-3 py-1.5 text-xs font-bold hover:bg-white/30">
               <LogOut className="h-3.5 w-3.5" /> Sign out
             </button>
           </div>
         </div>
+
+        {!isDriver && !isStaff && (
+          <section className="rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Bike className="h-4 w-4 text-brand" />
+              <h2 className="font-display text-2xl">Become a driver</h2>
+            </div>
+            {driverApplication ? (
+              <div className="rounded-xl bg-muted/50 p-3 text-sm">
+                Request status: <span className="font-bold capitalize text-brand">{driverApplication.status}</span>
+                {driverApplication.admin_notes && <div className="mt-1 text-xs text-muted-foreground">{driverApplication.admin_notes}</div>}
+              </div>
+            ) : (
+              <form onSubmit={requestDriverAccess} className="space-y-2">
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Full name" value={driverForm.name} onChange={(e) => setDriverForm({ ...driverForm, name: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Phone" value={driverForm.phone} onChange={(e) => setDriverForm({ ...driverForm, phone: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Bank" value={driverForm.bank_name} onChange={(e) => setDriverForm({ ...driverForm, bank_name: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account number" value={driverForm.bank_account_number} onChange={(e) => setDriverForm({ ...driverForm, bank_account_number: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account holder" value={driverForm.bank_account_holder} onChange={(e) => setDriverForm({ ...driverForm, bank_account_holder: e.target.value })} />
+                <button disabled={driverBusy} className="w-full rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-brand-foreground disabled:opacity-60">{driverBusy ? "Sending…" : "Request driver access"}</button>
+              </form>
+            )}
+          </section>
+        )}
 
         {/* Weekly specials */}
         {promos.length > 0 && (

@@ -56,10 +56,10 @@ export const adminUpsertDriverByEmail = createServerFn({ method: "POST" })
       _email: data.email,
       _name: data.name,
       _phone: data.phone,
-      _branch_id: data.branchId ?? null,
-      _bank_name: data.bankName || null,
-      _bank_account_number: data.bankAccountNumber || null,
-      _bank_account_holder: data.bankAccountHolder || null,
+      _branch_id: data.branchId || undefined,
+      _bank_name: data.bankName || undefined,
+      _bank_account_number: data.bankAccountNumber || undefined,
+      _bank_account_holder: data.bankAccountHolder || undefined,
     });
     if (error) throw error;
     const result = Array.isArray(upsertData) ? upsertData[0] : upsertData;
@@ -80,10 +80,10 @@ export const requestDriverApplication = createServerFn({ method: "POST" })
     const { data: appData, error } = await context.supabase.rpc("request_driver_application", {
       _name: data.name,
       _phone: data.phone,
-      _branch_id: data.branchId ?? null,
-      _bank_name: data.bankName || null,
-      _bank_account_number: data.bankAccountNumber || null,
-      _bank_account_holder: data.bankAccountHolder || null,
+      _branch_id: data.branchId || undefined,
+      _bank_name: data.bankName || undefined,
+      _bank_account_number: data.bankAccountNumber || undefined,
+      _bank_account_holder: data.bankAccountHolder || undefined,
     });
     if (error) throw error;
     const result = Array.isArray(appData) ? appData[0] : appData;
@@ -112,7 +112,7 @@ export const rejectDriverApplication = createServerFn({ method: "POST" })
     if (roleError || roleData !== "admin") {
       throw new Response("Only admins can reject driver requests", { status: 403 });
     }
-    const { data: resultData, error } = await context.supabase.rpc("reject_driver_application", { _application_id: data.applicationId, _admin_notes: data.notes ?? null });
+    const { data: resultData, error } = await context.supabase.rpc("reject_driver_application", { _application_id: data.applicationId, _admin_notes: data.notes || undefined });
     if (error) throw error;
     const result = Array.isArray(resultData) ? resultData[0] : resultData;
     return { ok: true, ...result };
@@ -125,7 +125,7 @@ export const submitDeliveryPayment = createServerFn({ method: "POST" })
     const { data: resultData, error } = await context.supabase.rpc("submit_delivery_payment", {
       _delivery_id: data.deliveryId,
       _payment_reference: data.reference,
-      _proof_path: data.proofPath ?? null,
+      _proof_path: data.proofPath || undefined,
     });
     if (error) throw error;
     const result = Array.isArray(resultData) ? resultData[0] : resultData;
