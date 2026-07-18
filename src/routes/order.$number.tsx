@@ -74,13 +74,14 @@ const PICKUP_STATUS_LABEL: Record<string, string> = {
 const DELIVERY_STATUS_LABEL: Record<string, string> = {
   pending: "Received",
   preparing: "Preparing",
-  ready: "Done preparing",
+  ready: "Ready",
+  handed_to_driver: "Handed to driver",
   out_for_delivery: "Out for delivery",
   completed: "Delivered",
   cancelled: "Cancelled",
 };
 const PICKUP_STEPS = ["pending", "preparing", "ready", "completed"] as const;
-const DELIVERY_STEPS = ["pending", "preparing", "out_for_delivery", "completed"] as const;
+const DELIVERY_STEPS = ["pending", "preparing", "ready", "handed_to_driver", "out_for_delivery", "completed"] as const;
 
 
 function OrderPage() {

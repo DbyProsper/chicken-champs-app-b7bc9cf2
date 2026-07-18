@@ -6,6 +6,7 @@ export type CartItem = {
   variant?: string | null;
   unit_price_cents: number;
   quantity: number;
+  image_url?: string | null;
 };
 
 type CartCtx = {

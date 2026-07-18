@@ -37,6 +37,10 @@ function MenuPage() {
     const hasExtras = categories.some((c) => c.slug === "extras" || c.name.toLowerCase().includes("extra"));
 
     let nextCategories = categories;
+    const promosCategory = categories.find((c) => c.slug === "promos");
+    if (promosCategory) {
+      nextCategories = [promosCategory, ...nextCategories.filter((c) => c.id !== promosCategory.id)];
+    }
     const saladsCategory = { id: "salads-section", name: "Salads", slug: "salads", sort_order: 999 };
     const drinksCategory = { id: "drinks-section", name: "Drinks", slug: "drinks", sort_order: 999 };
     const extrasCategory = { id: "extras-section", name: "Extras", slug: "extras", sort_order: 999 };
@@ -258,7 +262,7 @@ function Row({ item }: { item: MenuItem }) {
       {!available ? null : qty === 0 ? (
         <button
           onClick={() => {
-            add({ id: item.id, name: item.name, variant: item.variant_label, unit_price_cents: item.price_cents });
+            add({ id: item.id, name: item.name, variant: item.variant_label, unit_price_cents: item.price_cents, image_url: item.image_url });
             toast.success(`Added ${label}`);
           }}
           className="shrink-0 inline-flex items-center gap-1 rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-brand-foreground hover:bg-brand-dark"

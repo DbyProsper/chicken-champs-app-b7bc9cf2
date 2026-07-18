@@ -1,4 +1,15 @@
-create type if not exists public.app_role as enum ('admin', 'staff', 'user');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public' AND t.typname = 'app_role'
+  ) THEN
+    CREATE TYPE public.app_role AS ENUM ('admin', 'staff', 'user');
+  END IF;
+END
+$$;
 
 create or replace function public.has_role(_user_id uuid, _role public.app_role)
 returns boolean

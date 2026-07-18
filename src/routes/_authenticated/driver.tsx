@@ -1,16 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bike, Phone, MapPin, Loader2, LogOut, RefreshCw, Package, Navigation as NavIcon, CheckCircle2, Landmark } from "lucide-react";
+import { Bike, Phone, MapPin, Loader2, LogOut, RefreshCw, Package, Navigation as NavIcon, CheckCircle2, Landmark, CreditCard, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
 import { DELIVERY_STATUS_LABEL, type DeliveryStatus } from "@/lib/delivery";
-import { confirmDeliveryPayment } from "@/lib/admin.functions";
+import { confirmDeliveryPayment, getDriverProfileForCurrentUser } from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/_authenticated/driver")({
   head: () => ({ meta: [{ title: "Driver — Champs Chicken" }, { name: "robots", content: "noindex" }] }),
   component: DriverPage,
 });
+
+const SA_BANKS = ["Absa", "Capitec", "FNB", "Nedbank", "Standard Bank", "TymeBank", "African Bank", "Investec"];
 
 type Delivery = {
   id: string;
@@ -41,6 +43,7 @@ type Order = {
   delivery_lng: number | null;
   delivery_notes: string | null;
   branch_id: string;
+  pickup_pin: string | null;
 };
 
 type Branch = { id: string; name: string; city: string; latitude: number | null; longitude: number | null };
@@ -48,13 +51,17 @@ type ItemRow = { order_id: string; item_name: string; quantity: number };
 
 function DriverPage() {
   const [loading, setLoading] = useState(true);
-  const [driver, setDriver] = useState<{ id: string; name: string; phone?: string; status: string; bank_name?: string | null; bank_account_number?: string | null; bank_account_holder?: string | null } | null>(null);
+  const [driver, setDriver] = useState<{ id: string; name: string; phone?: string; status: string; approval_status?: string | null; bank_name?: string | null; bank_account_number?: string | null; bank_account_holder?: string | null } | null>(null);
   const [notDriver, setNotDriver] = useState(false);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [orders, setOrders] = useState<Record<string, Order>>({});
   const [items, setItems] = useState<Record<string, ItemRow[]>>({});
   const [branches, setBranches] = useState<Record<string, Branch>>({});
-  const [tab, setTab] = useState<"available" | "mine">("available");
+  const [tab, setTab] = useState<"available" | "active" | "history">("available");
+  const [settings, setSettings] = useState({ bankName: "", bankAccountNumber: "", bankAccountHolder: "", bankNote: "", phone: "" });
+  const [approvalBlocked, setApprovalBlocked] = useState(false);
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<"settings" | "deliveries">("deliveries");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,8 +73,8 @@ function DriverPage() {
       return;
     }
 
-    const { data: existingDriver } = await supabase.from("drivers").select("id, name, phone, status, bank_name, bank_account_number, bank_account_holder").eq("user_id", uid).maybeSingle();
-    const driverRecord = existingDriver as { id: string; name: string; phone?: string; status: string; bank_name?: string | null; bank_account_number?: string | null; bank_account_holder?: string | null } | null;
+    const profileData = await getDriverProfileForCurrentUser({ data: {} });
+    const driverRecord = profileData?.driver as { id: string; name: string; phone?: string; status: string; branch_id?: string | null; bank_name?: string | null; bank_account_number?: string | null; bank_account_holder?: string | null; approval_status?: string | null; roles?: string[] } | null;
 
     if (!driverRecord) {
       setNotDriver(true);
@@ -76,6 +83,15 @@ function DriverPage() {
     }
 
     setDriver(driverRecord);
+    const approvalStatus = driverRecord?.approval_status ?? (driverRecord?.status === "pending" ? "pending" : "approved");
+    setApprovalBlocked(["pending", "rejected", "suspended"].includes(approvalStatus));
+    setSettings({
+      bankName: driverRecord?.bank_name ?? "",
+      bankAccountNumber: driverRecord?.bank_account_number ?? "",
+      bankAccountHolder: driverRecord?.bank_account_holder ?? "",
+      bankNote: localStorage.getItem(`champs-driver-note:${driverRecord?.id ?? ""}`) ?? "",
+      phone: driverRecord?.phone ?? "",
+    });
 
     const { data: dels } = await supabase
       .from("deliveries")
@@ -88,7 +104,7 @@ function DriverPage() {
     const orderIds = list.map((d) => d.order_id);
     if (orderIds.length) {
       const [{ data: os }, { data: its }] = await Promise.all([
-        supabase.from("orders").select("id, order_number, customer_name, customer_phone, subtotal_cents, delivery_address, delivery_lat, delivery_lng, delivery_notes, branch_id").in("id", orderIds),
+        supabase.from("orders").select("id, order_number, customer_name, customer_phone, subtotal_cents, delivery_address, delivery_lat, delivery_lng, delivery_notes, branch_id, pickup_pin").in("id", orderIds),
         supabase.from("order_items").select("order_id, item_name, quantity").in("order_id", orderIds),
       ]);
       const om: Record<string, Order> = {};
@@ -121,14 +137,50 @@ function DriverPage() {
     const channel = supabase
       .channel("driver-deliveries")
       .on("postgres_changes", { event: "*", schema: "public", table: "deliveries" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, [load]);
 
+  useEffect(() => {
+    if (!driver) return;
+    const handoff = deliveries.find((d) => d.driver_id === driver.id && d.status === "handed_to_driver");
+    if (handoff) {
+      const order = orders[handoff.order_id];
+      if (order?.pickup_pin) {
+        toast.success(`Driver handoff: collect order ${order.order_number} now`);
+      }
+    }
+  }, [driver, deliveries, orders]);
+
   const available = useMemo(() => deliveries.filter((d) => d.driver_id === null && d.status === "pending"), [deliveries]);
-  const mine = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id) : []), [deliveries, driver]);
+  const active = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status !== "delivered") : []), [deliveries, driver]);
+  const history = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status === "delivered") : []), [deliveries, driver]);
+
+  async function saveSettings() {
+    if (!driver) return;
+    setSettingsBusy(true);
+    try {
+      const noteText = settings.bankNote.trim();
+      const accountHolder = [settings.bankAccountHolder.trim(), noteText].filter(Boolean).join(" • ");
+      const { error } = await supabase.from("drivers").update({
+        phone: settings.phone.trim() || driver.phone || null,
+        bank_name: settings.bankName.trim() || null,
+        bank_account_number: settings.bankAccountNumber.trim() || null,
+        bank_account_holder: accountHolder || null,
+      } as never).eq("id", driver.id);
+      if (error) throw error;
+      localStorage.setItem(`champs-driver-note:${driver.id}`, noteText);
+      setDriver((prev) => prev ? { ...prev, phone: settings.phone.trim() || prev.phone, bank_name: settings.bankName.trim() || undefined, bank_account_number: settings.bankAccountNumber.trim() || undefined, bank_account_holder: accountHolder || undefined } : prev);
+      toast.success("Banking details updated");
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not save driver settings");
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
 
   async function updateDelivery(id: string, patch: Partial<Delivery>) {
     const { error } = await supabase.from("deliveries").update(patch as never).eq("id", id);
@@ -140,32 +192,36 @@ function DriverPage() {
   }
 
   async function accept(d: Delivery) {
-    if (!driver) return;
+    if (!driver || approvalBlocked) return toast.error("Your driver account is not approved yet");
     // Assign a queue position at the end of this driver's active queue
     const currentPositions = deliveries
       .filter((x) => x.driver_id === driver.id && x.status !== "delivered")
       .map((x) => x.queue_position ?? 0);
     const nextPos = (currentPositions.length ? Math.max(...currentPositions) : 0) + 1;
     await updateDelivery(d.id, { driver_id: driver.id, status: "accepted", queue_position: nextPos });
-    toast.success("Order accepted");
+    toast.success("Order accepted — get moving and keep it safe");
   }
   async function nextStatus(d: Delivery) {
-    const flow: DeliveryStatus[] = ["accepted", "picked_up", "on_the_way", "delivered"];
+    const flow: DeliveryStatus[] = ["accepted", "handed_to_driver", "picked_up", "on_the_way", "delivered"];
     const idx = flow.indexOf(d.status as DeliveryStatus);
     const next = idx === -1 ? "picked_up" : flow[Math.min(idx + 1, flow.length - 1)];
     const patch: Partial<Delivery> = { status: next };
     if (next === "delivered") (patch as any).actual_delivery_time = new Date().toISOString();
     await updateDelivery(d.id, patch);
-    // sync order fulfillment status for customer view
-    if (next === "on_the_way") {
+    if (next === "picked_up") {
+      await supabase.from("orders").update({ status: "ready" as any }).eq("id", d.order_id);
+      toast.success("Try to deliver it hot!");
+    } else if (next === "on_the_way") {
       await supabase.from("orders").update({ status: "out_for_delivery" as any }).eq("id", d.order_id);
+      toast.success("Stay sharp and keep the route moving");
     } else if (next === "delivered") {
       await supabase.from("orders").update({ status: "completed" as any }).eq("id", d.order_id);
+      toast.success("Delivery complete — safe and on time");
     }
   }
 
   async function toggleStatus() {
-    if (!driver) return;
+    if (!driver || approvalBlocked) return toast.error("Your driver account is not approved yet");
     const nextStatus = driver.status === "active" ? "offline" : "active";
     const { error } = await supabase.from("drivers").update({ status: nextStatus } as never).eq("id", driver.id);
     if (error) return toast.error(error.message);
@@ -208,15 +264,19 @@ function DriverPage() {
     );
   }
 
-  const list = tab === "available" ? available : mine;
-  const deliveredMine = mine.filter((d) => d.status === "delivered");
-  const earningsCents = deliveredMine.reduce((sum, d) => sum + (d.payment_status === "paid" ? d.delivery_fee_cents : 0), 0);
+  const list = tab === "available" ? available : tab === "active" ? active : history;
+  const deliveredMine = history;
+  const earningsCents = deliveredMine.reduce((sum, d) => sum + d.delivery_fee_cents, 0);
+  const collectedCents = deliveredMine.reduce((sum, d) => sum + ((d.payment_status === "paid") ? d.delivery_fee_cents : 0), 0);
 
   return (
     <div className="min-h-screen bg-muted/40 pb-20">
       <header className="sticky top-0 z-30 border-b bg-background">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <div className="font-display text-xl text-brand inline-flex items-center gap-2"><Bike className="h-5 w-5" /> Driver</div>
+          <div className="font-display text-xl text-brand inline-flex items-center gap-2">
+            <img src="/images/champs/champs-logo.png" alt="Champs Chicken" className="h-8 w-auto" />
+            <span>Driver</span>
+          </div>
           <div className="flex items-center gap-2">
             <button onClick={toggleStatus} className={"rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider " + (driver?.status === "active" ? "bg-emerald-600 text-white" : "border bg-background text-muted-foreground")}>
               {driver?.status === "active" ? "Online" : "Offline"}
@@ -229,30 +289,51 @@ function DriverPage() {
           <button onClick={() => setTab("available")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "available" ? "bg-brand text-brand-foreground" : "border bg-background")}>
             Available ({available.length})
           </button>
-          <button onClick={() => setTab("mine")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "mine" ? "bg-brand text-brand-foreground" : "border bg-background")}>
-            My deliveries ({mine.length})
+          <button onClick={() => setTab("active")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "active" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+            Active ({active.length})
           </button>
+          <button onClick={() => setTab("history")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "history" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+            History & Earnings
+          </button>
+          <button onClick={() => setActiveTab("settings")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (activeTab === "settings" ? "bg-brand text-brand-foreground" : "border bg-background")}>Settings</button>
         </div>
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4 space-y-3">
-        {tab === "mine" && (
+        {tab === "history" && (
           <div className="rounded-2xl border bg-card p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Confirmed earnings</div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Delivered earnings</div>
                 <div className="font-display text-3xl text-brand">{formatZAR(earningsCents)}</div>
+                <div className="text-xs text-muted-foreground">Collected: {formatZAR(collectedCents)}</div>
               </div>
               <Landmark className="h-8 w-8 text-brand" />
             </div>
           </div>
         )}
-        {list.length === 0 && (
+        {activeTab === "settings" && (
+          <div className="rounded-2xl border bg-card p-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-brand"><Settings2 className="h-4 w-4" /> Driver settings</div>
+            <div className="mt-3 grid gap-2">
+              <select className="rounded-lg border bg-background px-3 py-2 text-sm" value={settings.bankName} onChange={(e) => setSettings({ ...settings, bankName: e.target.value })}>
+                <option value="">Select SA bank</option>
+                {SA_BANKS.map((bank) => <option key={bank} value={bank}>{bank}</option>)}
+              </select>
+              <input className="rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Account number" value={settings.bankAccountNumber} onChange={(e) => setSettings({ ...settings, bankAccountNumber: e.target.value })} />
+              <input className="rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Account holder" value={settings.bankAccountHolder} onChange={(e) => setSettings({ ...settings, bankAccountHolder: e.target.value })} />
+              <textarea className="rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Customer note (e.g. Capitec transfer to 0123456789 or Instant EFT only)" rows={2} value={settings.bankNote} onChange={(e) => setSettings({ ...settings, bankNote: e.target.value })} />
+              <input className="rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Phone" value={settings.phone} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} />
+              <button onClick={saveSettings} disabled={settingsBusy} className="rounded-lg bg-brand px-3 py-2 text-sm font-bold text-brand-foreground disabled:opacity-60">{settingsBusy ? "Saving…" : "Save settings"}</button>
+            </div>
+          </div>
+        )}
+        {activeTab === "deliveries" && list.length === 0 && (
           <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
             {tab === "available" ? "No orders waiting for a driver right now." : "You have no active deliveries."}
           </div>
         )}
-        {list.map((d) => {
+        {activeTab === "deliveries" && list.map((d) => {
           const o = orders[d.order_id];
           const b = o ? branches[o.branch_id] : null;
           const its = items[d.order_id] ?? [];
@@ -284,6 +365,12 @@ function DriverPage() {
                 </div>
               )}
 
+              {o?.delivery_address && (
+                <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground inline-flex items-center gap-2">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" />
+                  <span className="font-semibold text-foreground">#{o.order_number}</span>
+                </div>
+              )}
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1"><Package className="h-3.5 w-3.5" /> {its.reduce((s, r) => s + r.quantity, 0)} items</span>
                 {d.distance_km != null && <span>· {Number(d.distance_km).toFixed(1)} km</span>}
@@ -309,10 +396,20 @@ function DriverPage() {
                   </a>
                 )}
               </div>
+              {o?.pickup_pin && (
+                <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">
+                  <span>Customer PIN</span>
+                  <span className="font-semibold text-foreground">{o.pickup_pin}</span>
+                </div>
+              )}
+              <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">
+                <span>Delivery payment</span>
+                <span className="font-semibold text-foreground">{d.payment_status === "paid" ? "Paid" : d.payment_status === "pending" ? "Awaiting confirmation" : "Not paid"}</span>
+              </div>
 
-              {tab === "available" ? (
+                {tab === "available" ? (
                 <button onClick={() => accept(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">Accept order</button>
-              ) : d.status !== "delivered" ? (
+              ) : tab === "active" && d.status !== "delivered" ? (
                 <div className="space-y-2">
                   {d.payment_status === "pending" && (
                     <button onClick={() => confirmPayment(d.id)} className="w-full rounded-xl border border-emerald-600 px-3 py-3 text-sm font-bold text-emerald-700 inline-flex items-center justify-center gap-2">
@@ -320,7 +417,7 @@ function DriverPage() {
                     </button>
                   )}
                   <button onClick={() => nextStatus(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">
-                    {d.status === "accepted" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Advance"}
+                    {d.status === "accepted" || d.status === "handed_to_driver" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Advance"}
                   </button>
                 </div>
               ) : null}

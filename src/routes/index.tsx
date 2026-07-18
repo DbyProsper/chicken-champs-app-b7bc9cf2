@@ -76,18 +76,19 @@ function Home() {
           </div>
           <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-5 px-5 pb-1">
             {promos.map((p) => (
-              <div key={p.id} className="shrink-0 w-64 rounded-2xl border border-border bg-card p-4 relative overflow-hidden">
+              <Link key={p.id} to="/menu" hash="promos" className="shrink-0 w-64 rounded-2xl border border-border bg-card p-4 relative overflow-hidden">
                 {p.badge && (
                   <div className="absolute top-3 right-3 rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-brand-foreground uppercase tracking-wider">
                     {p.badge}
                   </div>
                 )}
+                {p.image_url && <img src={p.image_url} alt={p.title} className="mb-3 h-24 w-full rounded-lg object-cover" />}
                 <div className="font-display text-xl">{p.title}</div>
                 {p.description && <div className="mt-1 text-xs text-muted-foreground line-clamp-2">{p.description}</div>}
                 {p.price_cents != null && (
                   <div className="mt-2 font-display text-2xl text-brand">{formatZAR(p.price_cents)}</div>
                 )}
-              </div>
+              </Link>
             ))}
           </div>
         </section>

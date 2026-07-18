@@ -93,6 +93,12 @@ export async function getAccessRole(userId?: string | null): Promise<AccessRole>
 
     if (databaseRole === "admin" || found.includes("admin") || metadataRole === "admin" || metadataRoleFromArray === "admin" || isAdminByMetadata || isAdminByEmail) return "admin";
     if (databaseRole === "staff" || found.includes("staff") || metadataRole === "staff" || metadataRoleFromArray === "staff") return "staff";
+
+    if (activeUserId) {
+      const { data: driverRow, error: driverError } = await supabase.from("drivers").select("id").eq("user_id", activeUserId).maybeSingle();
+      if (driverRow && !driverError) return "driver";
+    }
+
     if (databaseRole === "driver" || found.includes("driver") || metadataRole === "driver" || metadataRoleFromArray === "driver") return "driver";
 
     if (userError || attempt < 3) {

@@ -17,6 +17,9 @@ type Promo = {
   description: string | null;
   badge: string | null;
   price_cents: number | null;
+  image_url: string | null;
+  active_from: string | null;
+  active_until: string | null;
   day_of_week: number | null;
   is_active: boolean;
   sort_order: number;
@@ -29,7 +32,7 @@ function PromoAdmin() {
   const [promos, setPromos] = useState<Promo[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [dirty, setDirty] = useState<Record<string, Partial<Promo>>>({});
-  const [newP, setNewP] = useState({ title: "", badge: "", description: "", price_cents: "", branch_id: "", day_of_week: "" });
+  const [newP, setNewP] = useState({ title: "", badge: "", description: "", price_cents: "", image_url: "", active_from: "", active_until: "", branch_id: "", day_of_week: "" });
 
   async function load() {
     const [p, b] = await Promise.all([
@@ -45,12 +48,46 @@ function PromoAdmin() {
     setDirty((d) => ({ ...d, [id]: { ...d[id], ...patch } }));
   }
 
+  async function syncPromoMenuItem(promo: Promo) {
+    try {
+      const { data: cat } = await supabase.from("categories").select("id").eq("slug", "promos").maybeSingle();
+      let categoryId = cat?.id;
+      if (!categoryId) {
+        const { data: insertedCat, error: catErr } = await supabase.from("categories").insert({ name: "Promos", slug: "promos", sort_order: -100 } as never).select("id").single();
+        if (catErr) throw catErr;
+        categoryId = insertedCat.id;
+      }
+      const { data: existing } = await supabase.from("menu_items").select("id").eq("name", promo.title).maybeSingle();
+      const payload = {
+        category_id: categoryId,
+        name: promo.title,
+        variant_label: null,
+        description: promo.description ?? "Special Champs offer",
+        price_cents: promo.price_cents ?? 0,
+        is_available: true,
+        sort_order: 0,
+        image_url: promo.image_url ?? null,
+      } as never;
+      if (existing?.id) {
+        const { error } = await supabase.from("menu_items").update(payload).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("menu_items").insert(payload);
+        if (error) throw error;
+      }
+    } catch (error: any) {
+      console.error(error);
+    }
+  }
+
   async function saveAll() {
     const entries = Object.entries(dirty);
     if (entries.length === 0) return;
     for (const [id, patch] of entries) {
+      const current = promos.find((item) => item.id === id);
       const { error } = await supabase.from("promotions").update(patch).eq("id", id);
       if (error) { toast.error(error.message); return; }
+      if (current) await syncPromoMenuItem({ ...current, ...patch } as Promo);
     }
     toast.success("Saved");
     setDirty({});
@@ -64,21 +101,33 @@ function PromoAdmin() {
       badge: newP.badge.trim() || null,
       description: newP.description.trim() || null,
       price_cents: newP.price_cents ? Math.round(Number(newP.price_cents) * 100) : null,
+      image_url: newP.image_url.trim() || null,
+      active_from: newP.active_from ? new Date(newP.active_from).toISOString() : null,
+      active_until: newP.active_until ? new Date(newP.active_until).toISOString() : null,
       branch_id: newP.branch_id || null,
       day_of_week: newP.day_of_week === "" ? null : Number(newP.day_of_week),
     };
-    const { error } = await supabase.from("promotions").insert(payload);
+    const { data, error } = await supabase.from("promotions").insert(payload).select("*").single();
     if (error) { toast.error(error.message); return; }
+    await syncPromoMenuItem(data as Promo);
     toast.success("Promo created");
-    setNewP({ title: "", badge: "", description: "", price_cents: "", branch_id: "", day_of_week: "" });
+    setNewP({ title: "", badge: "", description: "", price_cents: "", image_url: "", active_from: "", active_until: "", branch_id: "", day_of_week: "" });
     load();
   }
 
   async function remove(id: string) {
     if (!confirm("Delete this promo?")) return;
+    const promo = promos.find((item) => item.id === id);
     const { error } = await supabase.from("promotions").delete().eq("id", id);
     if (error) toast.error(error.message);
-    else { toast.success("Deleted"); load(); }
+    else {
+      if (promo?.title) {
+        const { data: existing } = await supabase.from("menu_items").select("id").eq("name", promo.title).maybeSingle();
+        if (existing?.id) await supabase.from("menu_items").delete().eq("id", existing.id);
+      }
+      toast.success("Deleted");
+      load();
+    }
   }
 
   return (
@@ -103,6 +152,9 @@ function PromoAdmin() {
             <input className="rounded-md border px-3 py-2 text-sm" placeholder="Title (e.g. Wednesday Special)" value={newP.title} onChange={(e) => setNewP({ ...newP, title: e.target.value })} />
             <input className="rounded-md border px-3 py-2 text-sm" placeholder="Badge (e.g. WED)" value={newP.badge} onChange={(e) => setNewP({ ...newP, badge: e.target.value })} />
             <input className="rounded-md border px-3 py-2 text-sm sm:col-span-2" placeholder="Description" value={newP.description} onChange={(e) => setNewP({ ...newP, description: e.target.value })} />
+            <input className="rounded-md border px-3 py-2 text-sm" placeholder="Image URL (optional)" value={newP.image_url} onChange={(e) => setNewP({ ...newP, image_url: e.target.value })} />
+            <input type="datetime-local" className="rounded-md border px-3 py-2 text-sm" value={newP.active_from} onChange={(e) => setNewP({ ...newP, active_from: e.target.value })} />
+            <input type="datetime-local" className="rounded-md border px-3 py-2 text-sm" value={newP.active_until} onChange={(e) => setNewP({ ...newP, active_until: e.target.value })} />
             <input type="number" step="0.01" className="rounded-md border px-3 py-2 text-sm" placeholder="Price (R, optional)" value={newP.price_cents} onChange={(e) => setNewP({ ...newP, price_cents: e.target.value })} />
             <select className="rounded-md border px-3 py-2 text-sm" value={newP.branch_id} onChange={(e) => setNewP({ ...newP, branch_id: e.target.value })}>
               <option value="">All branches</option>
@@ -140,6 +192,11 @@ function PromoAdmin() {
                     </select>
                   </div>
                   <textarea className="mt-2 w-full rounded-md border px-2 py-1.5 text-sm" rows={2} value={cur.description ?? ""} onChange={(e) => edit(p.id, { description: e.target.value || null })} placeholder="Description" />
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <input className="rounded-md border px-2 py-1.5 text-sm" value={cur.image_url ?? ""} onChange={(e) => edit(p.id, { image_url: e.target.value || null })} placeholder="Image URL" />
+                    <input type="datetime-local" className="rounded-md border px-2 py-1.5 text-sm" value={cur.active_from ? cur.active_from.slice(0, 16) : ""} onChange={(e) => edit(p.id, { active_from: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+                    <input type="datetime-local" className="rounded-md border px-2 py-1.5 text-sm" value={cur.active_until ? cur.active_until.slice(0, 16) : ""} onChange={(e) => edit(p.id, { active_until: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+                  </div>
                   <div className="mt-2 flex items-center justify-between text-xs">
                     <label className="inline-flex items-center gap-2">
                       <input type="checkbox" checked={cur.is_active} onChange={(e) => edit(p.id, { is_active: e.target.checked })} /> Active

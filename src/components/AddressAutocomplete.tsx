@@ -1,22 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, MapPin } from "lucide-react";
 
-type Suggestion = { placeId: string; text: string; secondary?: string };
+type Suggestion = {
+  placePrediction?: any;
+  placeId: string;
+  text: string;
+  secondary?: string;
+};
 
-let mapsLoaderPromise: Promise<typeof google> | null = null;
+let mapsLoaderPromise: Promise<any> | null = null;
 
-function loadMaps(): Promise<typeof google> {
+function loadMaps(): Promise<any> {
   if (typeof window === "undefined") return Promise.reject(new Error("SSR"));
-  const w = window as unknown as { google?: typeof google };
+  const w = window as Window & typeof globalThis & { google?: any; __champsMapsCb?: () => void };
   if (w.google?.maps) return Promise.resolve(w.google);
   if (mapsLoaderPromise) return mapsLoaderPromise;
   const key = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as string | undefined;
   const channel = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as string | undefined;
   if (!key) return Promise.reject(new Error("Google Maps key missing"));
   mapsLoaderPromise = new Promise((resolve, reject) => {
-    (window as unknown as { __champsMapsCb?: () => void }).__champsMapsCb = () => resolve((window as unknown as { google: typeof google }).google);
+    w.__champsMapsCb = () => resolve((window as Window & typeof globalThis & { google?: any }).google);
     const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&loading=async&callback=__champsMapsCb${channel ? `&channel=${channel}` : ""}`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places,routes&loading=async&callback=__champsMapsCb${channel ? `&channel=${channel}` : ""}`;
     s.async = true;
     s.onerror = () => reject(new Error("Failed to load Google Maps"));
     document.head.appendChild(s);
@@ -40,7 +45,7 @@ export function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const tokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
+  const tokenRef = useRef<any>(null);
   const debRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -49,60 +54,91 @@ export function AddressAutocomplete({
 
   useEffect(() => {
     if (debRef.current) window.clearTimeout(debRef.current);
-    if (!value || value.length < 3) {
+    if (!value || value.trim().length < 3) {
       setSuggestions([]);
+      setOpen(false);
       return;
     }
+
     debRef.current = window.setTimeout(async () => {
       try {
         setLoading(true);
         const g = await loadMaps();
-        const places = (await g.maps.importLibrary("places")) as google.maps.PlacesLibrary;
+        const places = (await g.maps.importLibrary("places")) as any;
         if (!tokenRef.current) tokenRef.current = new places.AutocompleteSessionToken();
-        const req: google.maps.places.AutocompleteRequest = {
-          input: value,
-          sessionToken: tokenRef.current,
+
+        const request: any = {
+          input: value.trim(),
           includedRegionCodes: ["za"],
+          sessionToken: tokenRef.current,
         };
         if (bias) {
-          req.locationBias = { center: { lat: bias.lat, lng: bias.lng }, radius: 20000 } as google.maps.CircleLiteral;
+          request.locationBias = { center: { lat: bias.lat, lng: bias.lng }, radius: 20000 };
         }
-        const { suggestions: raw } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
-        const list: Suggestion[] = raw
-          .map((s) => {
-            const p = s.placePrediction;
+
+        const predictionResults = await new Promise<any[]>((resolve) => {
+          const current = (places as any).AutocompleteSuggestion?.fetchAutocompleteSuggestions
+            ? (places as any).AutocompleteSuggestion.fetchAutocompleteSuggestions(request)
+            : null;
+
+          if (current && typeof (current as Promise<any>).then === "function") {
+            (current as Promise<any>)
+              .then((response: any) => {
+                const suggestionsList = Array.isArray(response?.suggestions) ? response.suggestions : [];
+                resolve(suggestionsList);
+              })
+              .catch(() => resolve([]));
+          } else {
+            resolve([]);
+          }
+        });
+
+        const list: Suggestion[] = predictionResults
+          .map((p: any) => {
             if (!p) return null;
             return {
-              placeId: p.placeId,
-              text: p.mainText?.toString() ?? p.text?.toString() ?? "",
-              secondary: p.secondaryText?.toString() ?? undefined,
+              placePrediction: p,
+              placeId: p.placePrediction?.placeId ?? p.place_id ?? p.placeId ?? "",
+              text: p.placePrediction?.text?.toString() ?? p.description ?? p.text ?? "",
+              secondary: p.placePrediction?.structuredFormatting?.secondaryText ?? p.secondary ?? undefined,
             };
           })
           .filter(Boolean) as Suggestion[];
         setSuggestions(list);
-        setOpen(true);
+        setOpen(list.length > 0);
       } catch {
         setSuggestions([]);
+        setOpen(false);
       } finally {
         setLoading(false);
       }
-    }, 250);
+    }, 300);
+
+    return () => {
+      if (debRef.current) window.clearTimeout(debRef.current);
+    };
   }, [value, bias?.lat, bias?.lng]);
 
   async function pick(s: Suggestion) {
     setOpen(false);
+    setSuggestions([]);
     try {
       const g = await loadMaps();
-      const places = (await g.maps.importLibrary("places")) as google.maps.PlacesLibrary;
-      const place = new places.Place({ id: s.placeId });
-      await place.fetchFields({ fields: ["formattedAddress", "location"] });
-      const addr = place.formattedAddress ?? `${s.text}${s.secondary ? `, ${s.secondary}` : ""}`;
+      const places = (await g.maps.importLibrary("places")) as any;
+      const placeId = s.placeId;
+      if (!placeId) throw new Error("No place selected");
+
+      const place = new places.Place({ id: placeId });
+      await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
+      const label = place.displayName ?? place.formattedAddress ?? `${s.text}${s.secondary ? ` · ${s.secondary}` : ""}`;
       const loc = place.location;
-      onChange(addr);
-      if (loc) onSelect({ address: addr, lat: loc.lat(), lng: loc.lng() });
+      onChange(label);
+      if (loc) onSelect({ address: label, lat: loc.lat(), lng: loc.lng() });
       tokenRef.current = null;
     } catch {
-      onChange(`${s.text}${s.secondary ? `, ${s.secondary}` : ""}`);
+      const fallback = `${s.text}${s.secondary ? ` · ${s.secondary}` : ""}`;
+      onChange(fallback);
+      onSelect({ address: fallback, lat: bias?.lat ?? 0, lng: bias?.lng ?? 0 });
     }
   }
 

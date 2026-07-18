@@ -27,7 +27,8 @@ function Account() {
   const [isStaff, setIsStaff] = useState(false);
   const [isDriver, setIsDriver] = useState(false);
   const [driverApplication, setDriverApplication] = useState<{ status: string; admin_notes: string | null } | null>(null);
-  const [driverForm, setDriverForm] = useState({ name: "", phone: "", bank_name: "", bank_account_number: "", bank_account_holder: "" });
+  const [driverForm, setDriverForm] = useState({ name: "", phone: "", id_number: "", student_number: "", profile_photo_url: "", selfie_url: "", branch_id: "", bank_name: "", bank_account_number: "", bank_account_holder: "" });
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; city: string }>>([]);
   const [driverBusy, setDriverBusy] = useState(false);
   const [checking, setChecking] = useState(true);
 
@@ -39,13 +40,21 @@ function Account() {
         return;
       }
       setUserId(u.user.id);
-      const [{ data: p }, role] = await Promise.all([
+      const [{ data: p }, role, { data: branchData }] = await Promise.all([
         supabase.from("profiles").select("full_name, phone").eq("id", u.user.id).maybeSingle(),
         getAccessRole(u.user.id),
+        supabase.from("branches").select("id, name, city").eq("is_active", true).order("sort_order"),
       ]);
       setProfile(p);
       setIsStaff(role === "admin" || role === "staff");
-      setIsDriver(role === "driver");
+      const driverRole = role === "driver";
+      let resolvedIsDriver = driverRole;
+      if (!driverRole) {
+        const { data: driverRow, error: driverError } = await supabase.from("drivers").select("id").eq("user_id", u.user.id).maybeSingle();
+        if (driverRow && !driverError) resolvedIsDriver = true;
+      }
+      setIsDriver(resolvedIsDriver);
+      setBranches((branchData ?? []) as Array<{ id: string; name: string; city: string }>);
       setDriverForm((f) => ({ ...f, name: p?.full_name || "", phone: p?.phone || "" }));
       const { data: app } = await supabase.from("driver_applications").select("status, admin_notes").eq("user_id", u.user.id).maybeSingle();
       setDriverApplication(app);
@@ -108,7 +117,7 @@ function Account() {
     if (!driverForm.name.trim() || !driverForm.phone.trim()) return toast.error("Name and phone are required");
     setDriverBusy(true);
     try {
-      await requestDriverApplication({ data: { name: driverForm.name, phone: driverForm.phone, bankName: driverForm.bank_name, bankAccountNumber: driverForm.bank_account_number, bankAccountHolder: driverForm.bank_account_holder } });
+      await requestDriverApplication({ data: { name: driverForm.name, phone: driverForm.phone, idNumber: driverForm.id_number || undefined, studentNumber: driverForm.student_number || undefined, profilePhotoUrl: driverForm.profile_photo_url || undefined, selfieUrl: driverForm.selfie_url || undefined, branchId: driverForm.branch_id || undefined, bankName: driverForm.bank_name, bankAccountNumber: driverForm.bank_account_number, bankAccountHolder: driverForm.bank_account_holder } });
       toast.success("Driver request sent");
       setDriverApplication({ status: "pending", admin_notes: null });
     } catch (err: any) {
@@ -146,30 +155,6 @@ function Account() {
             </button>
           </div>
         </div>
-
-        {!isDriver && !isStaff && (
-          <section className="rounded-2xl border border-border bg-card p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Bike className="h-4 w-4 text-brand" />
-              <h2 className="font-display text-2xl">Become a driver</h2>
-            </div>
-            {driverApplication ? (
-              <div className="rounded-xl bg-muted/50 p-3 text-sm">
-                Request status: <span className="font-bold capitalize text-brand">{driverApplication.status}</span>
-                {driverApplication.admin_notes && <div className="mt-1 text-xs text-muted-foreground">{driverApplication.admin_notes}</div>}
-              </div>
-            ) : (
-              <form onSubmit={requestDriverAccess} className="space-y-2">
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Full name" value={driverForm.name} onChange={(e) => setDriverForm({ ...driverForm, name: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Phone" value={driverForm.phone} onChange={(e) => setDriverForm({ ...driverForm, phone: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Bank" value={driverForm.bank_name} onChange={(e) => setDriverForm({ ...driverForm, bank_name: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account number" value={driverForm.bank_account_number} onChange={(e) => setDriverForm({ ...driverForm, bank_account_number: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account holder" value={driverForm.bank_account_holder} onChange={(e) => setDriverForm({ ...driverForm, bank_account_holder: e.target.value })} />
-                <button disabled={driverBusy} className="w-full rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-brand-foreground disabled:opacity-60">{driverBusy ? "Sending…" : "Request driver access"}</button>
-              </form>
-            )}
-          </section>
-        )}
 
         {/* Weekly specials */}
         {promos.length > 0 && (
@@ -213,6 +198,39 @@ function Account() {
                 </button>
               ))}
             </div>
+          </section>
+        )}
+
+        {!isDriver && !isStaff && (
+          <section className="rounded-2xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Bike className="h-4 w-4 text-brand" />
+              <h2 className="font-display text-2xl">Become a driver</h2>
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">Drivers must provide their own motorbike or car. Champs will not provide transport.</p>
+            {driverApplication ? (
+              <div className="rounded-xl bg-muted/50 p-3 text-sm">
+                Request status: <span className="font-bold capitalize text-brand">{driverApplication.status}</span>
+                {driverApplication.admin_notes && <div className="mt-1 text-xs text-muted-foreground">{driverApplication.admin_notes}</div>}
+              </div>
+            ) : (
+              <form onSubmit={requestDriverAccess} className="space-y-2">
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Full name" value={driverForm.name} onChange={(e) => setDriverForm({ ...driverForm, name: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Phone" value={driverForm.phone} onChange={(e) => setDriverForm({ ...driverForm, phone: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="ID or student number" value={driverForm.id_number} onChange={(e) => setDriverForm({ ...driverForm, id_number: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Student number (optional)" value={driverForm.student_number} onChange={(e) => setDriverForm({ ...driverForm, student_number: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Profile photo URL (optional)" value={driverForm.profile_photo_url} onChange={(e) => setDriverForm({ ...driverForm, profile_photo_url: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Selfie URL (optional)" value={driverForm.selfie_url} onChange={(e) => setDriverForm({ ...driverForm, selfie_url: e.target.value })} />
+                <select className="w-full rounded-xl border bg-background px-3 py-2 text-sm" value={driverForm.branch_id} onChange={(e) => setDriverForm({ ...driverForm, branch_id: e.target.value })}>
+                  <option value="">Choose a branch</option>
+                  {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.city}</option>)}
+                </select>
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Bank" value={driverForm.bank_name} onChange={(e) => setDriverForm({ ...driverForm, bank_name: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account number" value={driverForm.bank_account_number} onChange={(e) => setDriverForm({ ...driverForm, bank_account_number: e.target.value })} />
+                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account holder" value={driverForm.bank_account_holder} onChange={(e) => setDriverForm({ ...driverForm, bank_account_holder: e.target.value })} />
+                <button disabled={driverBusy} className="w-full rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-brand-foreground disabled:opacity-60">{driverBusy ? "Sending…" : "Request driver access"}</button>
+              </form>
+            )}
           </section>
         )}
 

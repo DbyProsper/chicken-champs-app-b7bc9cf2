@@ -38,6 +38,7 @@ const STATUS_META = {
   pending: { label: "New", icon: Clock, color: "bg-amber-500" },
   preparing: { label: "Preparing", icon: ChefHat, color: "bg-blue-500" },
   ready: { label: "Ready", icon: Package, color: "bg-emerald-500" },
+  handed_to_driver: { label: "Handed to driver", icon: Bike, color: "bg-indigo-500" },
   out_for_delivery: { label: "Out for delivery", icon: Bike, color: "bg-purple-500" },
   completed: { label: "Completed", icon: CheckCircle2, color: "bg-green-600" },
   cancelled: { label: "Cancelled", icon: XCircle, color: "bg-neutral-500" },
@@ -129,9 +130,22 @@ function Admin() {
   }, [role]);
 
   async function updateStatus(id: string, status: Order["status"]) {
-    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
-    if (error) toast.error(error.message);
-    else toast.success(`Marked ${STATUS_META[status].label}`);
+    const current = orders.find((order) => order.id === id);
+    const nextStatus = current?.fulfillment === "delivery" && status === "ready" ? "out_for_delivery" : status;
+    const { error } = await supabase.from("orders").update({ status: nextStatus }).eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (current?.fulfillment === "delivery") {
+      await supabase.from("deliveries").update({ status: status === "ready" ? "handed_to_driver" : status === "completed" ? "delivered" : "accepted" } as never).eq("order_id", id);
+    }
+    setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, status: nextStatus } : order)));
+    if (current?.fulfillment === "delivery" && status === "ready") {
+      toast.success("Marked handed to driver · order is now out for delivery");
+    } else {
+      toast.success(`Marked ${STATUS_META[nextStatus].label}`);
+    }
   }
 
   async function verifyOrder(order: Order, pinAttempt: string) {
@@ -213,9 +227,10 @@ function Admin() {
     <div className="min-h-screen pb-10 bg-muted/40">
       <header className="sticky top-0 z-30 border-b bg-background">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 gap-2">
-          <div className="font-display text-2xl text-brand flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5" /> Champs Admin
-          </div>
+          <Link to="/" className="font-display text-2xl text-brand flex items-center gap-2">
+            <img src="/images/champs/champs-logo.png" alt="Champs Chicken" className="h-8 w-auto" />
+            <span>Champs Admin</span>
+          </Link>
           <div className="flex items-center gap-2">
             {/* Small-screen quick links (hidden on large screens where sidebar appears) */}
             <Link to="/admin/promotions" className="inline-flex md:hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-accent">
@@ -372,6 +387,7 @@ function OrderCard({
   const statusFlow = o.fulfillment === "pickup" ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
   const currentIdx = statusFlow.indexOf(o.status);
   const next = currentIdx >= 0 && currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null;
+  const shouldShowNext = !(o.fulfillment === "delivery" && o.status === "out_for_delivery");
   const [pinInput, setPinInput] = useState("");
   const [showVerify, setShowVerify] = useState(false);
 
@@ -401,6 +417,11 @@ function OrderCard({
           {o.fulfillment === "delivery" ? <Bike className="h-3 w-3" /> : <Package className="h-3 w-3" />}
           <span className="capitalize font-semibold">{o.fulfillment}</span>
         </div>
+        {o.pickup_pin && (
+          <div className="mt-2 inline-flex items-center rounded-full bg-brand/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-brand">
+            PIN {o.pickup_pin}
+          </div>
+        )}
         {o.delivery_notes && <div className="mt-1 rounded-md bg-muted p-2 text-xs italic">{o.delivery_notes}</div>}
       </div>
       <ul className="mt-3 text-sm space-y-0.5 border-t pt-3">
@@ -452,7 +473,7 @@ function OrderCard({
               Cancel
             </button>
           )}
-          {next && (
+          {next && shouldShowNext && (
             <button onClick={() => onUpdateStatus(o.id, next)} className="rounded-full bg-brand px-3 py-1.5 text-[11px] font-bold text-brand-foreground hover:bg-brand-dark">
               → {STATUS_META[next].label}
             </button>

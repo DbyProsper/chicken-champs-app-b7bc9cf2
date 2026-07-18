@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
 import { useCart } from "@/lib/cart";
 import { formatZAR } from "@/lib/format";
+import { getMenuImageForItem } from "@/lib/menu-images";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -34,8 +35,12 @@ function CartPage() {
           </div>
         ) : (
           <ul className="space-y-2">
-            {items.map((i) => (
+            {items.map((i) => {
+              const auto = getMenuImageForItem(i.name, i.variant);
+              const image = i.image_url ? { src: i.image_url, alt: i.name } : auto;
+              return (
               <li key={i.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+                <img src={image.src} alt={image.alt} className="h-14 w-14 rounded-lg object-cover" />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">
                     {i.name}{i.variant ? ` — ${i.variant}` : ""}
@@ -55,7 +60,8 @@ function CartPage() {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>
@@ -67,9 +73,14 @@ function CartPage() {
               <span className="text-sm text-muted-foreground">Subtotal ({count} items)</span>
               <span className="font-display text-2xl text-brand">{formatZAR(subtotalCents)}</span>
             </div>
-            <Link to="/checkout" className="block w-full rounded-full bg-brand py-3 text-center text-sm font-bold text-brand-foreground hover:bg-brand-dark">
-              Checkout
-            </Link>
+            <div className="flex gap-2">
+              <Link to="/menu" className="flex-1 rounded-full border border-border px-3 py-3 text-center text-sm font-bold text-muted-foreground hover:bg-muted">
+                Back to menu
+              </Link>
+              <Link to="/checkout" className="flex-1 rounded-full bg-brand px-3 py-3 text-center text-sm font-bold text-brand-foreground hover:bg-brand-dark">
+                Checkout
+              </Link>
+            </div>
           </div>
         </div>
       )}

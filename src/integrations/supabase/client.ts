@@ -17,9 +17,9 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     }
 
     // New Supabase API keys are opaque strings, not bearer JWTs.
-    // Always strip any existing Authorization header so stale JWTs from prior sessions
-    // do not get attached to public requests.
-    if (isNewSupabaseApiKey(supabaseKey)) {
+    // Only remove an abusive Authorization header that contains the API key itself.
+    // Do not strip a valid user session token from authenticated requests.
+    if (isNewSupabaseApiKey(supabaseKey) && headers.get('Authorization') === `Bearer ${supabaseKey}`) {
       headers.delete('Authorization');
     }
 
@@ -28,6 +28,58 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
+function createProjectScopedStorage(url: string, supabaseKey: string) {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  const projectHost = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const keyTag = supabaseKey.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 16);
+  const prefix = `champs-supabase:${projectHost}:${keyTag}:`;
+
+  return {
+    getItem(name: string) {
+      return window.localStorage.getItem(`${prefix}${name}`);
+    },
+    setItem(name: string, value: string) {
+      window.localStorage.setItem(`${prefix}${name}`, value);
+    },
+    removeItem(name: string) {
+      window.localStorage.removeItem(`${prefix}${name}`);
+    },
+    clear() {
+      for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          window.localStorage.removeItem(key);
+        }
+      }
+    },
+    get length() {
+      let count = 0;
+      for (let i = 0; i < window.localStorage.length; i += 1) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          count += 1;
+        }
+      }
+      return count;
+    },
+    key(index: number) {
+      let count = 0;
+      for (let i = 0; i < window.localStorage.length; i += 1) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          if (count === index) {
+            return key.substring(prefix.length);
+          }
+          count += 1;
+        }
+      }
+      return null;
+    },
+  };
+}
 
 function createSupabaseClient() {
   // Use import.meta.env for client-side (Vite build-time replacement)
@@ -40,7 +92,7 @@ function createSupabaseClient() {
       ...(!SUPABASE_URL ? ['SUPABASE_URL'] : []),
       ...(!SUPABASE_PUBLISHABLE_KEY ? ['SUPABASE_PUBLISHABLE_KEY'] : []),
     ];
-    const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
+    const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Set VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY (client) or SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY (SSR).`;
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
   }
@@ -50,7 +102,7 @@ function createSupabaseClient() {
       fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
     },
     auth: {
-      storage: typeof window !== 'undefined' ? localStorage : undefined,
+      storage: createProjectScopedStorage(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
       persistSession: true,
       autoRefreshToken: true,
     }

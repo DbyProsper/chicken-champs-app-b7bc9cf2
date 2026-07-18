@@ -10,18 +10,22 @@ import { toast } from "sonner";
 import { MapPin, Loader2, Navigation, AlertTriangle, Bike } from "lucide-react";
 import {
   DEFAULT_DELIVERY_SETTINGS,
-  distanceKm,
   fetchDeliverySettings,
   fetchActiveDeliveryCount,
   fetchOnlineDriverCount,
   getBrowserLocation,
+  getRoadDistanceKm,
+  reverseGeocodeCoordinates,
   quoteDelivery,
   computeMode,
   computeEtaRange,
+  getCartDeliveryEligibility,
+  distanceKm,
   type DeliverySettings,
   type DeliveryQuote,
 } from "@/lib/delivery";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { getMenuImageForItem } from "@/lib/menu-images";
 
 export const Route = createFileRoute("/checkout")({
   head: () => ({
@@ -59,7 +63,11 @@ function Checkout() {
   const [settings, setSettings] = useState<DeliverySettings>(DEFAULT_DELIVERY_SETTINGS);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [activeCount, setActiveCount] = useState(0);
+  const [roadDistanceKm, setRoadDistanceKm] = useState<number | null>(null);
+  const [distanceBusy, setDistanceBusy] = useState(false);
+  const [distanceError, setDistanceError] = useState<string | null>(null);
   const [driversOnline, setDriversOnline] = useState<number | null>(null);
   const [form, setForm] = useState({
     customer_name: "",
@@ -103,12 +111,49 @@ function Checkout() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (form.fulfillment !== "delivery") {
+      setRoadDistanceKm(null);
+      setDistanceError(null);
+      return;
+    }
+    if (!addressConfirmed || !branch?.latitude || !branch?.longitude || !coords) {
+      setRoadDistanceKm(null);
+      setDistanceError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setDistanceBusy(true);
+    setDistanceError(null);
+
+    getRoadDistanceKm(
+      { lat: branch.latitude, lng: branch.longitude },
+      coords,
+    )
+      .then((d) => {
+        if (!cancelled) setRoadDistanceKm(d);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setRoadDistanceKm(null);
+          setDistanceError(err instanceof Error ? err.message : "Could not calculate delivery distance");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDistanceBusy(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [form.fulfillment, branch?.latitude, branch?.longitude, coords?.lat, coords?.lng, addressConfirmed]);
+
+  const deliveryEligibility = useMemo(() => getCartDeliveryEligibility(items, subtotalCents), [items, subtotalCents]);
   const quote: DeliveryQuote | null = useMemo(() => {
     if (form.fulfillment !== "delivery") return null;
-    if (!branch?.latitude || !branch?.longitude || !coords) return null;
-    const d = distanceKm({ lat: branch.latitude, lng: branch.longitude }, coords);
-    return quoteDelivery(d, settings);
-  }, [form.fulfillment, branch, coords, settings]);
+    if (!deliveryEligibility.allowed) return null;
+    if (!branch?.latitude || !branch?.longitude || !coords || roadDistanceKm == null) return null;
+    return quoteDelivery(roadDistanceKm, settings, form.delivery_address);
+  }, [form.fulfillment, deliveryEligibility.allowed, branch, coords, settings, roadDistanceKm, form.delivery_address]);
 
   const deliveryFee = quote?.ok ? quote.fee_cents : 0;
   const totalCents = subtotalCents + deliveryFee;
@@ -118,6 +163,14 @@ function Checkout() {
     try {
       const loc = await getBrowserLocation();
       setCoords(loc);
+      try {
+        const address = await reverseGeocodeCoordinates(loc.lat, loc.lng);
+        setForm((f) => ({ ...f, delivery_address: address }));
+        setAddressConfirmed(true);
+      } catch {
+        setForm((f) => ({ ...f, delivery_address: `Current location (${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)})` }));
+        setAddressConfirmed(true);
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Could not read your location");
     } finally {
@@ -144,9 +197,10 @@ function Checkout() {
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
 
     if (parsed.data.fulfillment === "delivery") {
+      if (!deliveryEligibility.allowed) return toast.error(deliveryEligibility.reason ?? "Delivery unavailable for this order");
       if (!coords) return toast.error("Please share your delivery location");
-      if (!quote?.ok) return toast.error(quote?.reason ?? "Delivery unavailable");
-      if (!parsed.data.delivery_address?.trim()) return toast.error("Please add a delivery address");
+      if (!addressConfirmed) return toast.error("Please confirm your delivery address by selecting a suggestion or using your current location");
+      if (!quote?.ok) return toast.error(quote?.reason ?? "Please confirm a valid delivery address and try again");
     }
 
     setSubmitting(true);
@@ -159,10 +213,10 @@ function Checkout() {
           customer_phone: parsed.data.customer_phone,
           fulfillment: parsed.data.fulfillment,
           delivery_notes: parsed.data.delivery_notes || null,
-          subtotal_cents: totalCents,
+          subtotal_cents: subtotalCents,
           branch_id: branch.id,
           user_id: userId,
-          delivery_address: isDelivery ? parsed.data.delivery_address : null,
+          delivery_address: isDelivery ? (parsed.data.delivery_address?.trim() || `${coords?.lat?.toFixed(4) || 0}, ${coords?.lng?.toFixed(4) || 0}`) : null,
           delivery_lat: isDelivery && coords ? coords.lat : null,
           delivery_lng: isDelivery && coords ? coords.lng : null,
           delivery_fee_cents: isDelivery ? deliveryFee : 0,
@@ -281,19 +335,30 @@ function Checkout() {
 
           {form.fulfillment === "delivery" && (
             <div className="mt-3 space-y-3">
+              {!deliveryEligibility.allowed && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+                  {deliveryEligibility.reason}
+                </div>
+              )}
               <AddressAutocomplete
                 value={form.delivery_address}
-                onChange={(v) => setForm((f) => ({ ...f, delivery_address: v }))}
+                onChange={(v) => {
+                  setForm((f) => ({ ...f, delivery_address: v }));
+                  setAddressConfirmed(false);
+                  setRoadDistanceKm(null);
+                  setDistanceError(null);
+                }}
                 onSelect={({ address, lat, lng }) => {
                   setForm((f) => ({ ...f, delivery_address: address }));
                   setCoords({ lat, lng });
+                  setAddressConfirmed(true);
                 }}
                 placeholder="Delivery address (start typing to search)"
                 bias={branch?.latitude && branch?.longitude ? { lat: branch.latitude, lng: branch.longitude } : undefined}
               />
               <textarea
                 className="w-full rounded-xl border border-input bg-card px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-                placeholder="Notes for the driver (optional)"
+                placeholder="Residence / hostel / building or driver note (optional)"
                 rows={2}
                 value={form.delivery_notes}
                 onChange={(e) => setForm({ ...form, delivery_notes: e.target.value })}
@@ -311,11 +376,17 @@ function Checkout() {
                 {coords ? "Update my location" : "Use my current location"}
               </button>
 
+              {!addressConfirmed && form.delivery_address.trim().length > 0 && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  Confirm the address by selecting a suggestion or using your current location before placing the order.
+                </div>
+              )}
+
               {coords && quote && (
                 quote.ok ? (
                   (() => {
                     const mode = computeMode(activeCount, settings);
-                    const eta = computeEtaRange(1, settings, mode);
+                    const eta = computeEtaRange(1, settings, mode, roadDistanceKm ?? undefined);
                     return (
                       <div className="rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 text-sm">
                         <div className="flex items-center justify-between">
@@ -348,6 +419,16 @@ function Checkout() {
                 )
               )}
 
+              {distanceBusy && (
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Calculating live road distance…
+                </div>
+              )}
+              {distanceError && (
+                <div className="rounded-xl border border-destructive/40 bg-destructive/5 px-3 py-2 text-[11px] text-destructive">
+                  {distanceError}
+                </div>
+              )}
               {!coords && (
                 <p className="text-[11px] text-muted-foreground">
                   Delivery fees: 0–{settings.tier1_max_km}km {formatZAR(settings.tier1_fee_cents)} · {settings.tier1_max_km}–{settings.tier2_max_km}km {formatZAR(settings.tier2_fee_cents)} · {settings.tier2_max_km}–{settings.tier3_max_km}km {formatZAR(settings.tier3_fee_cents)}
@@ -361,26 +442,29 @@ function Checkout() {
           <div className="text-sm space-y-1.5">
             {items.map((i) => (
               <div key={i.id} className="flex justify-between gap-3">
-                <span className="truncate"><span className="font-bold text-brand">{i.quantity}×</span> {i.name}{i.variant ? ` — ${i.variant}` : ""}</span>
+                <span className="flex items-center gap-2 truncate">
+                  <img src={i.image_url ? i.image_url : getMenuImageForItem(i.name, i.variant).src} alt={i.name} className="h-8 w-8 rounded-md object-cover" />
+                  <span className="truncate"><span className="font-bold text-brand">{i.quantity}×</span> {i.name}{i.variant ? ` — ${i.variant}` : ""}</span>
+                </span>
                 <span className="shrink-0 tabular-nums">{formatZAR(i.unit_price_cents * i.quantity)}</span>
               </div>
             ))}
             <div className="mt-2 flex justify-between text-xs">
-              <span className="text-muted-foreground">Subtotal</span>
+              <span className="text-muted-foreground">Food total</span>
               <span className="tabular-nums">{formatZAR(subtotalCents)}</span>
             </div>
             {form.fulfillment === "delivery" && (
               <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Delivery</span>
+                <span className="text-muted-foreground">Delivery fee</span>
                 <span className="tabular-nums">{quote?.ok ? formatZAR(deliveryFee) : "—"}</span>
               </div>
             )}
             <div className="mt-2 flex justify-between border-t border-border pt-3">
-              <span className="font-bold">Total</span>
-              <span className="font-display text-xl text-brand">{formatZAR(totalCents)}</span>
+              <span className="font-bold">Pay now</span>
+              <span className="font-display text-xl text-brand">{formatZAR(subtotalCents)}</span>
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">Payment on collection or delivery. No card required.</p>
+          <p className="mt-3 text-xs text-muted-foreground">Food is paid now at checkout. Delivery is paid separately to your driver after the order is delivered.</p>
         </section>
 
         <button
@@ -388,7 +472,7 @@ function Checkout() {
           disabled={submitting || !branch || (form.fulfillment === "delivery" && !quote?.ok)}
           className="w-full rounded-full bg-brand py-4 text-sm font-bold text-brand-foreground hover:bg-brand-dark disabled:opacity-60"
         >
-          {submitting ? "Placing order…" : `Place order · ${formatZAR(totalCents)}`}
+          {submitting ? "Placing order…" : `Place order · ${formatZAR(subtotalCents)}`}
         </button>
       </form>
     </div>

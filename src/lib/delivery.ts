@@ -74,12 +74,140 @@ export function distanceKm(a: { lat: number; lng: number }, b: { lat: number; ln
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
+export function isUFHAddress(address?: string | null): boolean {
+  const value = (address ?? "").toLowerCase();
+  return value.includes("ufh") || value.includes("university of fort hare") || value.includes("fort hare");
+}
+
+let mapsLoaderPromise: Promise<typeof google> | null = null;
+
+function loadMaps(): Promise<typeof google> {
+  if (typeof window === "undefined") return Promise.reject(new Error("SSR"));
+  const w = window as unknown as { google?: typeof google };
+  if (w.google?.maps) return Promise.resolve(w.google);
+  if (mapsLoaderPromise) return mapsLoaderPromise;
+  const key = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY as string | undefined;
+  const channel = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID as string | undefined;
+  if (!key) return Promise.reject(new Error("Google Maps key is not configured"));
+  mapsLoaderPromise = new Promise((resolve, reject) => {
+    (window as unknown as { __champsMapsCb?: () => void }).__champsMapsCb = () => resolve((window as unknown as { google: typeof google }).google);
+    const s = document.createElement("script");
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places,routes&loading=async&callback=__champsMapsCb${channel ? `&channel=${channel}` : ""}`;
+    s.async = true;
+    s.onerror = () => reject(new Error("Failed to load Google Maps"));
+    document.head.appendChild(s);
+  });
+  return mapsLoaderPromise;
+}
+
+export async function reverseGeocodeCoordinates(lat: number, lng: number): Promise<string> {
+  const g = await loadMaps();
+  const geocoder = new g.maps.Geocoder();
+  const result = await new Promise<{ formattedAddress: string }>((resolve, reject) => {
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      if (status === "OK" && results?.[0]) resolve({ formattedAddress: results[0].formatted_address });
+      else reject(new Error("Could not resolve your address"));
+    });
+  });
+  return result.formattedAddress;
+}
+
+export async function getRoadDistanceKm(
+  origin: { lat: number; lng: number },
+  destination: { lat: number; lng: number },
+): Promise<number> {
+  if (typeof window === "undefined") throw new Error("Road distance requires a browser request");
+  const g = await loadMaps();
+
+  const originLocation = new g.maps.LatLng(origin.lat, origin.lng);
+  const destinationLocation = new g.maps.LatLng(destination.lat, destination.lng);
+
+  try {
+    if (typeof (g.maps as typeof google.maps & { routes?: { RouteMatrix?: new () => any } }).routes?.RouteMatrix === "function") {
+      const service = new (g.maps as typeof google.maps & { routes: { RouteMatrix: new () => any } }).routes.RouteMatrix();
+      const response = await new Promise<{ distanceKm: number }>((resolve, reject) => {
+        service.computeRouteMatrix(
+          {
+            origins: [originLocation],
+            destinations: [destinationLocation],
+            travelMode: g.maps.TravelMode.DRIVING,
+            routingPreference: g.maps.RoutingPreference.FEWER_HIGHWAYS,
+          },
+          (result: any, status: string) => {
+            const element = result?.rows?.[0]?.elements?.[0];
+            if (status !== "OK" || element?.status !== "OK" || element?.distanceMeters == null) {
+              reject(new Error("Could not calculate live delivery distance"));
+              return;
+            }
+            resolve({ distanceKm: element.distanceMeters / 1000 });
+          },
+        );
+      });
+      return response.distanceKm;
+    }
+
+    if (typeof g.maps.DistanceMatrixService === "function") {
+      const service = new g.maps.DistanceMatrixService();
+      const response = await new Promise<{ distanceKm: number }>((resolve, reject) => {
+        service.getDistanceMatrix(
+          {
+            origins: [originLocation],
+            destinations: [destinationLocation],
+            travelMode: g.maps.TravelMode.DRIVING,
+            unitSystem: g.maps.UnitSystem.METRIC,
+          },
+          (result: any, status: string) => {
+            const element = result?.rows?.[0]?.elements?.[0];
+            if (status !== "OK" || element?.status !== "OK" || element?.distance?.value == null) {
+              reject(new Error("Could not calculate live delivery distance"));
+              return;
+            }
+            resolve({ distanceKm: element.distance.value / 1000 });
+          },
+        );
+      });
+      return response.distanceKm;
+    }
+  } catch (error) {
+    console.warn("[delivery] falling back to straight-line distance", error);
+  }
+
+  return distanceKm(origin, destination);
+}
+
 export type DeliveryQuote =
   | { ok: true; distance_km: number; fee_cents: number }
   | { ok: false; distance_km: number; reason: string };
 
-export function quoteDelivery(distance: number, s: DeliverySettings): DeliveryQuote {
+export type CartDeliveryEligibility = {
+  allowed: boolean;
+  reason?: string;
+};
+
+const DELIVERY_DISALLOWED_ITEM_PATTERNS = [/milkshake/i, /sundae/i, /ice cream/i, /ice-cream/i, /cold drink/i, /soft serve/i, /bun(?:s)?/i];
+
+export function getCartDeliveryEligibility(items: Array<{ name: string; variant?: string | null; unit_price_cents: number; quantity: number }>, subtotalCents: number): CartDeliveryEligibility {
+  const combined = items
+    .map((item) => `${item.name} ${item.variant ?? ""}`.toLowerCase())
+    .join(" ");
+
+  if (items.some((item) => /sundae|ice cream|ice-cream|soft serve/i.test(`${item.name} ${item.variant ?? ""}`))) {
+    return { allowed: false, reason: "Ice creams and sundaes are not available for delivery." };
+  }
+  if (subtotalCents < 4000) {
+    return { allowed: false, reason: "Delivery requires a minimum order of R40." };
+  }
+  if (items.length > 0 && items.every((item) => DELIVERY_DISALLOWED_ITEM_PATTERNS.some((pattern) => pattern.test(`${item.name} ${item.variant ?? ""}`)))) {
+    return { allowed: false, reason: "Delivery is not available for small item-only orders such as shakes, drinks, or buns." };
+  }
+  return { allowed: true };
+}
+
+export function quoteDelivery(distance: number, s: DeliverySettings, address?: string | null): DeliveryQuote {
   const km = Math.round(distance * 100) / 100;
+  if (isUFHAddress(address)) {
+    return { ok: true, distance_km: km, fee_cents: 3000 };
+  }
   if (km > s.max_radius_km) {
     return { ok: false, distance_km: km, reason: "Delivery not available in your area" };
   }
@@ -101,14 +229,15 @@ export function getBrowserLocation(): Promise<{ lat: number; lng: number }> {
   });
 }
 
-export const DELIVERY_STATUS_FLOW = ["pending", "accepted", "picked_up", "on_the_way", "delivered"] as const;
+export const DELIVERY_STATUS_FLOW = ["pending", "accepted", "handed_to_driver", "picked_up", "on_the_way", "delivered"] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUS_FLOW)[number];
 
 export const DELIVERY_STATUS_LABEL: Record<string, string> = {
-  pending: "Pending",
+  pending: "Received",
   accepted: "Accepted",
+  handed_to_driver: "Handed to driver",
   picked_up: "Picked up",
-  on_the_way: "On the way",
+  on_the_way: "Out for delivery",
   delivered: "Delivered",
 };
 
@@ -132,9 +261,11 @@ export function computeEtaRange(
   position: number,
   s: DeliverySettings,
   mode: DeliveryMode = "normal",
+  distanceKm?: number,
 ): { min: number; max: number } {
   const pos = Math.max(1, position);
-  const center = s.base_prep_min + pos * s.avg_stop_min;
+  const distanceBoost = distanceKm != null ? Math.max(0, Math.round(distanceKm * 2.5)) : 0;
+  const center = s.base_prep_min + pos * s.avg_stop_min + distanceBoost;
   const spread = mode === "peak" ? 10 : 7;
   return { min: Math.max(15, center - spread), max: center + spread };
 }

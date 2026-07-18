@@ -1,6 +1,124 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+
+async function resolveAccessRole(context: { supabase: { rpc: (name: string) => Promise<{ data: unknown; error?: { message?: string } | null }> }; claims?: Record<string, unknown>; userId?: string | null }) {
+  const currentUserId = (context.userId as string | undefined | null) ?? (context.claims?.sub as string | undefined | null);
+  const currentEmail = ((context.claims?.email as string | undefined | null) ?? "").toLowerCase();
+  const claimRole = typeof (context.claims?.role ?? context.claims?.app_metadata?.role ?? context.claims?.user_metadata?.role) === "string"
+    ? String(context.claims?.role ?? context.claims?.app_metadata?.role ?? context.claims?.user_metadata?.role).toLowerCase()
+    : null;
+  const adminEmails = ((import.meta.env.VITE_ADMIN_EMAILS as string | undefined) ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  let rpcRole: string | null = null;
+  let normalizedRoleRows: string[] = [];
+
+  try {
+    const { data: roleData } = await context.supabase.rpc("get_my_access_role");
+    rpcRole = typeof roleData === "string" ? roleData.toLowerCase() : null;
+  } catch {
+    rpcRole = null;
+  }
+
+  try {
+    const { data: roleRows } = currentUserId
+      ? await supabaseAdmin.from("user_roles").select("role").eq("user_id", currentUserId)
+      : { data: [] };
+    normalizedRoleRows = ((roleRows ?? []) as Array<{ role?: string }>).map((row) => row.role?.toLowerCase()).filter(Boolean) as string[];
+  } catch {
+    normalizedRoleRows = [];
+  }
+
+  if (rpcRole === "admin" || normalizedRoleRows.includes("admin") || claimRole === "admin" || adminEmails.includes(currentEmail)) {
+    return "admin" as const;
+  }
+  if (rpcRole === "staff" || normalizedRoleRows.includes("staff") || claimRole === "staff") {
+    return "staff" as const;
+  }
+  if (rpcRole === "driver" || normalizedRoleRows.includes("driver") || claimRole === "driver") {
+    return "driver" as const;
+  }
+  return null;
+}
+
+async function getVisibleDriversForAdmin() {
+  const [{ data: drivers }, { data: applications }] = await Promise.all([
+    supabaseAdmin.from("drivers").select("id,user_id,name,phone,status,branch_id,created_at,updated_at").order("created_at", { ascending: false }),
+    supabaseAdmin.from("driver_applications").select("id,user_id,name,phone,branch_id,bank_name,bank_account_number,bank_account_holder,status,created_at,admin_notes").order("created_at", { ascending: false }),
+  ]);
+
+  const driverRows = (drivers ?? []) as Array<{ id: string; user_id: string | null; name: string; phone: string; status: string; branch_id: string | null; created_at: string; updated_at: string }>;
+  const applicationRows = (applications ?? []) as Array<{ id: string; user_id: string; name: string; phone: string; branch_id: string | null; bank_name: string | null; bank_account_number: string | null; bank_account_holder: string | null; status: string; created_at: string; admin_notes: string | null }>;
+
+  if (driverRows.length === 0) {
+    return { drivers: driverRows, applications: applicationRows };
+  }
+
+  const { data: roleRows } = await supabaseAdmin.from("user_roles").select("user_id, role").in("user_id", driverRows.map((row) => row.user_id).filter(Boolean) as string[]);
+  const roleMap = new Map<string, string[]>();
+  for (const row of (roleRows ?? []) as Array<{ user_id: string; role: string }>) {
+    const list = roleMap.get(row.user_id) ?? [];
+    list.push(row.role);
+    roleMap.set(row.user_id, list);
+  }
+
+  const enrichedDrivers = driverRows.map((driver) => ({
+    ...driver,
+    approval_status: roleMap.get(driver.user_id ?? "")?.includes("driver") ? "approved" : driver.status,
+    roles: roleMap.get(driver.user_id ?? "") ?? [],
+  }));
+
+  return { drivers: enrichedDrivers, applications: applicationRows };
+}
+
+export const listDriversForAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({}).parse(input))
+  .handler(async ({ context }) => {
+    const accessRole = await resolveAccessRole(context);
+    const isStaff = accessRole === "admin" || accessRole === "staff";
+    if (!isStaff) throw new Response("Only staff can view driver directory", { status: 403 });
+
+    const { drivers, applications } = await getVisibleDriversForAdmin();
+
+    return {
+      ok: true,
+      drivers,
+      applications,
+    };
+  });
+
+export const getDriverProfileForCurrentUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({}).parse(input))
+  .handler(async ({ context }) => {
+    const uid = (context.userId as string | undefined | null) ?? (context.claims?.sub as string | undefined | null);
+    if (!uid) return { ok: false, driver: null };
+
+    const [{ data: driver }, { data: roleData }] = await Promise.all([
+      supabaseAdmin
+        .from("drivers")
+        .select("id,name,phone,status,branch_id,bank_name,bank_account_number,bank_account_holder,user_id")
+        .eq("user_id", uid)
+        .maybeSingle(),
+      supabaseAdmin.from("user_roles").select("role").eq("user_id", uid),
+    ]);
+
+    const roleNames = (roleData ?? []).map((row: { role?: string }) => row.role).filter(Boolean) as string[];
+    const resolvedDriver = driver
+      ? {
+          ...driver,
+          approval_status: roleNames.includes("driver") ? "approved" : driver.status,
+          roles: roleNames,
+        }
+      : null;
+
+    return { ok: true, driver: resolvedDriver };
+  });
 
 export const grantRoleByEmail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -9,8 +127,8 @@ export const grantRoleByEmail = createServerFn({ method: "POST" })
     role: z.enum(["admin", "staff", "user", "driver"]),
   }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: roleData, error: roleError } = await context.supabase.rpc("get_my_access_role");
-    if (roleError || roleData !== "admin") {
+    const accessRole = await resolveAccessRole(context);
+    if (accessRole !== "admin") {
       throw new Response("Only admins can grant access", { status: 403 });
     }
 
@@ -47,8 +165,8 @@ export const adminUpsertDriverByEmail = createServerFn({ method: "POST" })
     bankAccountHolder: z.string().trim().nullable().optional(),
   }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: roleData, error: roleError } = await context.supabase.rpc("get_my_access_role");
-    if (roleError || roleData !== "admin") {
+    const accessRole = await resolveAccessRole(context);
+    if (accessRole !== "admin") {
       throw new Response("Only admins can add drivers", { status: 403 });
     }
 
@@ -71,6 +189,10 @@ export const requestDriverApplication = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => z.object({
     name: z.string().trim().min(1),
     phone: z.string().trim().min(1),
+    idNumber: z.string().trim().min(1).nullable().optional(),
+    studentNumber: z.string().trim().nullable().optional(),
+    profilePhotoUrl: z.string().trim().nullable().optional(),
+    selfieUrl: z.string().trim().nullable().optional(),
     branchId: z.string().uuid().nullable().optional(),
     bankName: z.string().trim().nullable().optional(),
     bankAccountNumber: z.string().trim().nullable().optional(),
@@ -80,6 +202,10 @@ export const requestDriverApplication = createServerFn({ method: "POST" })
     const { data: appData, error } = await context.supabase.rpc("request_driver_application", {
       _name: data.name,
       _phone: data.phone,
+      _id_number: data.idNumber || undefined,
+      _student_number: data.studentNumber || undefined,
+      _profile_photo_url: data.profilePhotoUrl || undefined,
+      _selfie_url: data.selfieUrl || undefined,
       _branch_id: data.branchId || undefined,
       _bank_name: data.bankName || undefined,
       _bank_account_number: data.bankAccountNumber || undefined,
@@ -94,8 +220,8 @@ export const approveDriverApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ applicationId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: roleData, error: roleError } = await context.supabase.rpc("get_my_access_role");
-    if (roleError || roleData !== "admin") {
+    const accessRole = await resolveAccessRole(context);
+    if (accessRole !== "admin") {
       throw new Response("Only admins can approve driver requests", { status: 403 });
     }
     const { data: resultData, error } = await context.supabase.rpc("approve_driver_application", { _application_id: data.applicationId });
@@ -108,8 +234,8 @@ export const rejectDriverApplication = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => z.object({ applicationId: z.string().uuid(), notes: z.string().trim().optional() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { data: roleData, error: roleError } = await context.supabase.rpc("get_my_access_role");
-    if (roleError || roleData !== "admin") {
+    const accessRole = await resolveAccessRole(context);
+    if (accessRole !== "admin") {
       throw new Response("Only admins can reject driver requests", { status: 403 });
     }
     const { data: resultData, error } = await context.supabase.rpc("reject_driver_application", { _application_id: data.applicationId, _admin_notes: data.notes || undefined });

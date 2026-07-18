@@ -31,12 +31,20 @@ export const myOrdersQuery = (userId: string | null) =>
 export const activePromotionsQuery = queryOptions({
   queryKey: ["promotions"],
   queryFn: async () => {
+    const now = new Date().toISOString();
     const { data, error } = await supabase
       .from("promotions")
       .select("*")
       .eq("is_active", true)
+      .or(`active_from.is.null,active_from.lte.${now}`)
+      .or(`active_until.is.null,active_until.gte.${now}`)
       .order("sort_order");
     if (error) throw error;
-    return data ?? [];
+    return (data ?? []).filter((promo: any) => {
+      if (!promo.is_active) return false;
+      if (promo.active_from && new Date(promo.active_from) > new Date()) return false;
+      if (promo.active_until && new Date(promo.active_until) < new Date()) return false;
+      return true;
+    });
   },
 });

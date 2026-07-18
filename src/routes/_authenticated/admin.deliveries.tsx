@@ -4,7 +4,7 @@ import { ArrowLeft, Bike, Plus, Trash2, Loader2, Phone, Zap } from "lucide-react
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
-import { adminUpsertDriverByEmail, approveDriverApplication, rejectDriverApplication } from "@/lib/admin.functions";
+import { adminUpsertDriverByEmail, approveDriverApplication, rejectDriverApplication, listDriversForAdmin } from "@/lib/admin.functions";
 import {
   DELIVERY_STATUS_LABEL,
   DEFAULT_DELIVERY_SETTINGS,
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/admin/deliveries")({
   component: DeliveriesPage,
 });
 
-type Driver = { id: string; user_id: string | null; name: string; phone: string; status: string; branch_id: string | null };
+type Driver = { id: string; user_id: string | null; name: string; phone: string; status: string; approval_status?: string | null; branch_id: string | null };
 type Delivery = {
   id: string;
   order_id: string;
@@ -55,15 +55,16 @@ function DeliveriesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: drv }, { data: dels }, { data: bs }, { data: apps }, s] = await Promise.all([
-      supabase.from("drivers").select("id, user_id, name, phone, status, branch_id").order("created_at", { ascending: false }),
+    const [directoryResult, { data: dels }, { data: bs }, s] = await Promise.all([
+      listDriversForAdmin({ data: {} }).catch(() => ({ ok: false, drivers: [], applications: [] })),
       supabase.from("deliveries").select("id, order_id, driver_id, status, distance_km, delivery_fee_cents, created_at, batch_id, queue_position, estimated_eta_min, estimated_eta_max").order("created_at", { ascending: false }).limit(100),
       supabase.from("branches").select("id, name, city").eq("is_active", true).order("sort_order"),
-      supabase.from("driver_applications").select("id, user_id, name, phone, branch_id, bank_name, bank_account_number, bank_account_holder, status, created_at, admin_notes").order("created_at", { ascending: false }),
       fetchDeliverySettings().catch(() => DEFAULT_DELIVERY_SETTINGS),
     ]);
-    setDrivers((drv ?? []) as Driver[]);
-    setApplications((apps ?? []) as DriverApplication[]);
+    const adminDirectory = (directoryResult as any)?.data ?? directoryResult;
+    const driverRows = ((adminDirectory as any)?.drivers ?? []) as Driver[];
+    setDrivers(driverRows);
+    setApplications(((adminDirectory as any)?.applications ?? []) as DriverApplication[]);
     const dl = (dels ?? []) as Delivery[];
     setDeliveries(dl);
     setSettings(s);
@@ -87,7 +88,7 @@ function DeliveriesPage() {
     try {
       const pending = deliveries.filter((d) => d.driver_id === null && d.status === "pending");
       if (pending.length === 0) { toast.message("No unassigned deliveries"); return; }
-      const activeDrivers = drivers.filter((d) => d.status === "active");
+      const activeDrivers = drivers.filter((d) => d.approval_status === "approved" && d.status === "active");
       if (activeDrivers.length === 0) { toast.error("No active drivers online right now"); return; }
 
       const activeCount = deliveries.filter((d) => d.status !== "delivered").length;
@@ -188,6 +189,14 @@ function DeliveriesPage() {
     load();
   }
 
+  async function deleteApplication(app: DriverApplication) {
+    if (!confirm(`Delete ${app.name}'s driver request?`)) return;
+    const { error } = await supabase.from("driver_applications").delete().eq("id", app.id);
+    if (error) return toast.error(error.message);
+    toast.success("Driver request deleted");
+    load();
+  }
+
   async function assignDriver(deliveryId: string, driverId: string | null) {
     const patch: any = { driver_id: driverId };
     if (driverId) patch.status = "accepted";
@@ -246,6 +255,7 @@ function DeliveriesPage() {
                     </div>
                     <button onClick={() => approveApplication(app)} className="rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-brand-foreground">Approve</button>
                     <button onClick={() => rejectApplication(app)} className="rounded-full border px-3 py-1.5 text-xs font-semibold text-muted-foreground">Reject</button>
+                    <button onClick={() => deleteApplication(app)} className="rounded-full border border-destructive/50 px-3 py-1.5 text-xs font-semibold text-destructive">Delete</button>
                   </div>
                 ))}
               </div>
@@ -260,7 +270,18 @@ function DeliveriesPage() {
                   <div className="font-semibold text-sm">{d.name}</div>
                   <div className="text-xs text-muted-foreground inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {d.phone}{d.branch_id && branches[d.branch_id] ? ` · ${branches[d.branch_id].name}` : ""}</div>
                 </div>
-                <span className={"rounded-full px-2 py-0.5 text-[10px] font-bold uppercase " + (d.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{d.status}</span>
+                <select value={d.branch_id ?? ""} onChange={async (e) => {
+                  const { error } = await supabase.from("drivers").update({ branch_id: e.target.value || null } as never).eq("id", d.id);
+                  if (error) toast.error(error.message);
+                  else {
+                    setDrivers((prev) => prev.map((item) => item.id === d.id ? { ...item, branch_id: e.target.value || null } : item));
+                    toast.success("Driver branch updated");
+                  }
+                }} className="rounded-xl border border-input bg-background px-3 py-2 text-sm">
+                  <option value="">No branch</option>
+                  {Object.values(branches).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+                <span className={"rounded-full px-2 py-0.5 text-[10px] font-bold uppercase " + (d.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{d.approval_status ?? d.status}</span>
                 <button onClick={() => removeDriver(d.id)} className="grid h-8 w-8 place-items-center rounded-full border text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
