@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bike, Phone, MapPin, Loader2, LogOut, RefreshCw, Package, Navigation as NavIcon, CheckCircle2, Landmark, CreditCard, Settings2 } from "lucide-react";
+import { Bike, Phone, MapPin, Loader2, LogOut, RefreshCw, Package, Navigation as NavIcon, CheckCircle2, Landmark, CreditCard, Settings2, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
-import { DELIVERY_STATUS_LABEL, type DeliveryStatus } from "@/lib/delivery";
+import { DELIVERY_STATUS_LABEL, getOrderStatusForDeliveryStatus, type DeliveryStatus } from "@/lib/delivery";
 import { confirmDeliveryPayment, getDriverProfileForCurrentUser } from "@/lib/admin.functions";
+import { DriverPageSkeleton } from "@/components/Loader";
 
 export const Route = createFileRoute("/_authenticated/driver")({
   head: () => ({ meta: [{ title: "Driver — Champs Chicken" }, { name: "robots", content: "noindex" }] }),
@@ -62,6 +63,7 @@ function DriverPage() {
   const [approvalBlocked, setApprovalBlocked] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"settings" | "deliveries">("deliveries");
+  const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,6 +102,16 @@ function DriverPage() {
       .order("created_at", { ascending: false });
     const list = (dels ?? []) as Delivery[];
     setDeliveries(list);
+
+    const proofMap: Record<string, string> = {};
+    for (const delivery of list) {
+      if (!delivery.proof_of_payment_url) continue;
+      try {
+        const { data: signedData, error } = await supabase.storage.from("payment-proofs").createSignedUrl(delivery.proof_of_payment_url, 60 * 60 * 24);
+        if (!error && signedData?.signedUrl) proofMap[delivery.id] = signedData.signedUrl;
+      } catch {}
+    }
+    setProofUrls(proofMap);
 
     const orderIds = list.map((d) => d.order_id);
     if (orderIds.length) {
@@ -155,7 +167,7 @@ function DriverPage() {
     }
   }, [driver, deliveries, orders]);
 
-  const available = useMemo(() => deliveries.filter((d) => d.driver_id === null && d.status === "pending"), [deliveries]);
+  const available = useMemo(() => deliveries.filter((d) => d.driver_id === null && d.status !== "delivered"), [deliveries]);
   const active = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status !== "delivered") : []), [deliveries, driver]);
   const history = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status === "delivered") : []), [deliveries, driver]);
 
@@ -193,7 +205,6 @@ function DriverPage() {
 
   async function accept(d: Delivery) {
     if (!driver || approvalBlocked) return toast.error("Your driver account is not approved yet");
-    // Assign a queue position at the end of this driver's active queue
     const currentPositions = deliveries
       .filter((x) => x.driver_id === driver.id && x.status !== "delivered")
       .map((x) => x.queue_position ?? 0);
@@ -208,15 +219,18 @@ function DriverPage() {
     const patch: Partial<Delivery> = { status: next };
     if (next === "delivered") (patch as any).actual_delivery_time = new Date().toISOString();
     await updateDelivery(d.id, patch);
-    if (next === "picked_up") {
-      await supabase.from("orders").update({ status: "ready" as any }).eq("id", d.order_id);
-      toast.success("Try to deliver it hot!");
-    } else if (next === "on_the_way") {
-      await supabase.from("orders").update({ status: "out_for_delivery" as any }).eq("id", d.order_id);
+    const orderStatus = getOrderStatusForDeliveryStatus(next);
+    if (orderStatus) {
+      await supabase.from("orders").update({ status: orderStatus as any }).eq("id", d.order_id);
+    }
+    if (next === "on_the_way") {
       toast.success("Stay sharp and keep the route moving");
     } else if (next === "delivered") {
-      await supabase.from("orders").update({ status: "completed" as any }).eq("id", d.order_id);
       toast.success("Delivery complete — safe and on time");
+    } else if (next === "accepted") {
+      toast.success("Order accepted — get moving and keep it safe");
+    } else {
+      toast.success("Delivery status updated");
     }
   }
 
@@ -244,11 +258,7 @@ function DriverPage() {
   }
 
   if (loading) {
-    return (
-      <div className="grid min-h-screen place-items-center">
-        <Loader2 className="h-6 w-6 animate-spin text-brand" />
-      </div>
-    );
+    return <DriverPageSkeleton />;
   }
 
   if (notDriver) {
@@ -286,13 +296,13 @@ function DriverPage() {
           </div>
         </div>
         <div className="mx-auto flex max-w-2xl gap-2 px-4 pb-3">
-          <button onClick={() => setTab("available")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "available" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+          <button onClick={() => { setTab("available"); setActiveTab("deliveries"); }} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "available" ? "bg-brand text-brand-foreground" : "border bg-background")}>
             Available ({available.length})
           </button>
-          <button onClick={() => setTab("active")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "active" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+          <button onClick={() => { setTab("active"); setActiveTab("deliveries"); }} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "active" ? "bg-brand text-brand-foreground" : "border bg-background")}>
             Active ({active.length})
           </button>
-          <button onClick={() => setTab("history")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "history" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+          <button onClick={() => { setTab("history"); setActiveTab("deliveries"); }} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "history" ? "bg-brand text-brand-foreground" : "border bg-background")}>
             History & Earnings
           </button>
           <button onClick={() => setActiveTab("settings")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (activeTab === "settings" ? "bg-brand text-brand-foreground" : "border bg-background")}>Settings</button>
@@ -406,6 +416,18 @@ function DriverPage() {
                 <span>Delivery payment</span>
                 <span className="font-semibold text-foreground">{d.payment_status === "paid" ? "Paid" : d.payment_status === "pending" ? "Awaiting confirmation" : "Not paid"}</span>
               </div>
+              {d.proof_of_payment_url && (
+                <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                  <span>Proof of payment</span>
+                  {proofUrls[d.id] ? (
+                    <a href={proofUrls[d.id]} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-brand">
+                      <Eye className="h-3.5 w-3.5" /> View
+                    </a>
+                  ) : (
+                    <span className="font-semibold text-foreground">Attached</span>
+                  )}
+                </div>
+              )}
 
                 {tab === "available" ? (
                 <button onClick={() => accept(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">Accept order</button>
@@ -416,8 +438,12 @@ function DriverPage() {
                       <CheckCircle2 className="h-4 w-4" /> Confirm payment received
                     </button>
                   )}
-                  <button onClick={() => nextStatus(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">
-                    {d.status === "accepted" || d.status === "handed_to_driver" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Advance"}
+                  <button
+                    onClick={() => nextStatus(d)}
+                    disabled={d.status !== "handed_to_driver" && d.status !== "picked_up" && d.status !== "on_the_way"}
+                    className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {d.status === "handed_to_driver" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Waiting for handoff"}
                   </button>
                 </div>
               ) : null}

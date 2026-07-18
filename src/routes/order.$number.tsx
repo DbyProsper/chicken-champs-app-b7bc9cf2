@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { fireNotification, notificationPermission, requestNotificationPermission } from "@/lib/notifications";
 import { waLink, orderStatusMessage } from "@/lib/whatsapp";
-import { PAYMENT_STATUS_LABEL, triggerAutoAssign } from "@/lib/delivery";
+import { PAYMENT_STATUS_LABEL, resolveOrderDisplayStatus, triggerAutoAssign } from "@/lib/delivery";
 import { toast } from "sonner";
 import { submitDeliveryPayment } from "@/lib/admin.functions";
 
@@ -94,6 +94,7 @@ function OrderPage() {
   const [payBusy, setPayBusy] = useState(false);
 
   const isDelivery = data?.order.fulfillment === "delivery";
+  const effectiveStatus = resolveOrderDisplayStatus(data?.order.status ?? "pending", data?.delivery?.status ?? null) ?? data?.order.status ?? "pending";
   const STATUS_LABEL = isDelivery ? DELIVERY_STATUS_LABEL : PICKUP_STATUS_LABEL;
   const STATUS_STEPS = isDelivery ? DELIVERY_STEPS : PICKUP_STEPS;
 
@@ -175,8 +176,8 @@ function OrderPage() {
 
   if (!data) return <div className="p-6 text-sm">Order not found.</div>;
   const { order, items, branch, delivery, driver, aheadCount } = data;
-  const currentIdx = (STATUS_STEPS as readonly string[]).indexOf(order.status);
-  const waText = orderStatusMessage(order.order_number, order.status, order.customer_name);
+  const currentIdx = (STATUS_STEPS as readonly string[]).indexOf(effectiveStatus);
+  const waText = orderStatusMessage(order.order_number, effectiveStatus, order.customer_name);
   const verifyPayload = `champs:${order.order_number}:${order.pickup_pin}`;
   const d: any = delivery;
 
@@ -189,7 +190,7 @@ function OrderPage() {
           <div className="mt-3 text-xs uppercase tracking-widest opacity-80">Order number</div>
           <div className="font-display text-4xl">{order.order_number}</div>
           <div className="mt-4 inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider">
-            {STATUS_LABEL[order.status] ?? order.status}
+            {STATUS_LABEL[effectiveStatus] ?? effectiveStatus}
           </div>
           {isDelivery && d?.estimated_eta_min != null && d?.estimated_eta_max != null && (
             <div className="mt-3 text-sm">
@@ -205,7 +206,7 @@ function OrderPage() {
           )}
         </div>
 
-        {order.status !== "cancelled" && (
+        {effectiveStatus !== "cancelled" && (
           <div className="mt-4 rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center justify-between">
               {STATUS_STEPS.map((s, i) => (

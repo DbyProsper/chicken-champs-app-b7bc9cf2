@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Minus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/Header";
@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getMenuImageForItem } from "@/lib/menu-images";
 import { getMenuIconForItem, getCategoryIcon } from "@/lib/menu-icons";
+import { MenuPageSkeleton } from "@/components/Loader";
 
 export const Route = createFileRoute("/menu")({
   head: () => ({
@@ -29,7 +30,13 @@ export const Route = createFileRoute("/menu")({
 const SCROLL_OFFSET = 112;
 
 function MenuPage() {
-  const { data } = useSuspenseQuery(menuQuery);
+  const query = useQuery(menuQuery);
+  const data = query.data;
+
+  if (!data) {
+    return <MenuPageSkeleton />;
+  }
+
   const { categories, items } = data;
   const displayCategories = useMemo(() => {
     const hasSalads = categories.some((c) => c.slug === "salads" || c.name.toLowerCase().includes("salad"));

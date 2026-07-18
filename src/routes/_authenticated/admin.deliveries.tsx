@@ -86,7 +86,7 @@ function DeliveriesPage() {
   async function autoBatch() {
     setBatching(true);
     try {
-      const pending = deliveries.filter((d) => d.driver_id === null && d.status === "pending");
+      const pending = deliveries.filter((d) => d.driver_id === null && d.status !== "delivered");
       if (pending.length === 0) { toast.message("No unassigned deliveries"); return; }
       const activeDrivers = drivers.filter((d) => d.approval_status === "approved" && d.status === "active");
       if (activeDrivers.length === 0) { toast.error("No active drivers online right now"); return; }

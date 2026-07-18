@@ -12,6 +12,7 @@ import { getAccessRole } from "@/lib/roles";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
 import { requestDriverApplication } from "@/lib/admin.functions";
+import { AccountPageSkeleton } from "@/components/Loader";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
@@ -127,7 +128,7 @@ function Account() {
     }
   }
 
-  if (checking) return <div className="p-8 text-sm text-muted-foreground">…</div>;
+  if (checking) return <AccountPageSkeleton />;
 
   return (
     <div className="min-h-screen pb-24">

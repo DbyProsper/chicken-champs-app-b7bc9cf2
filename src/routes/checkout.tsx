@@ -469,7 +469,7 @@ function Checkout() {
 
         <button
           type="submit"
-          disabled={submitting || !branch || (form.fulfillment === "delivery" && !quote?.ok)}
+          disabled={submitting || !branch || (form.fulfillment === "delivery" && (!deliveryEligibility.allowed || !quote?.ok))}
           className="w-full rounded-full bg-brand py-4 text-sm font-bold text-brand-foreground hover:bg-brand-dark disabled:opacity-60"
         >
           {submitting ? "Placing order…" : `Place order · ${formatZAR(subtotalCents)}`}

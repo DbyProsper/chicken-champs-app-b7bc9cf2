@@ -184,13 +184,18 @@ export type CartDeliveryEligibility = {
   reason?: string;
 };
 
+export const MAX_DELIVERY_ITEMS = 12;
 const DELIVERY_DISALLOWED_ITEM_PATTERNS = [/milkshake/i, /sundae/i, /ice cream/i, /ice-cream/i, /cold drink/i, /soft serve/i, /bun(?:s)?/i];
 
 export function getCartDeliveryEligibility(items: Array<{ name: string; variant?: string | null; unit_price_cents: number; quantity: number }>, subtotalCents: number): CartDeliveryEligibility {
   const combined = items
     .map((item) => `${item.name} ${item.variant ?? ""}`.toLowerCase())
     .join(" ");
+  const totalItems = items.reduce((sum, item) => sum + Math.max(0, item.quantity), 0);
 
+  if (totalItems > MAX_DELIVERY_ITEMS) {
+    return { allowed: false, reason: `Delivery is unavailable for orders over ${MAX_DELIVERY_ITEMS} items because a motorbike can only carry so much.` };
+  }
   if (items.some((item) => /sundae|ice cream|ice-cream|soft serve/i.test(`${item.name} ${item.variant ?? ""}`))) {
     return { allowed: false, reason: "Ice creams and sundaes are not available for delivery." };
   }
@@ -231,6 +236,54 @@ export function getBrowserLocation(): Promise<{ lat: number; lng: number }> {
 
 export const DELIVERY_STATUS_FLOW = ["pending", "accepted", "handed_to_driver", "picked_up", "on_the_way", "delivered"] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUS_FLOW)[number];
+export type OrderStatus = "pending" | "preparing" | "ready" | "handed_to_driver" | "out_for_delivery" | "completed" | "cancelled";
+
+export function resolveOrderDisplayStatus(orderStatus: string, deliveryStatus?: string | null): OrderStatus | null {
+  if (deliveryStatus === "handed_to_driver") return "handed_to_driver";
+  if (deliveryStatus === "picked_up" || deliveryStatus === "on_the_way") return "out_for_delivery";
+  if (deliveryStatus === "delivered") return "completed";
+  switch (orderStatus) {
+    case "pending":
+    case "preparing":
+    case "ready":
+    case "out_for_delivery":
+    case "completed":
+    case "cancelled":
+      return orderStatus as OrderStatus;
+    default:
+      return null;
+  }
+}
+
+export type PersistedOrderStatus = "pending" | "preparing" | "ready" | "out_for_delivery" | "completed" | "cancelled";
+
+export function getOrderStatusForDeliveryStatus(status: string): PersistedOrderStatus | null {
+  switch (status as DeliveryStatus) {
+    case "pending":
+      return "pending";
+    case "accepted":
+    case "handed_to_driver":
+      return "ready";
+    case "picked_up":
+    case "on_the_way":
+      return "out_for_delivery";
+    case "delivered":
+      return "completed";
+    default:
+      return null;
+  }
+}
+
+export function getDeliveryStatusForOrderStatus(status: string): DeliveryStatus | null {
+  switch (status) {
+    case "handed_to_driver":
+      return "handed_to_driver";
+    case "completed":
+      return "delivered";
+    default:
+      return null;
+  }
+}
 
 export const DELIVERY_STATUS_LABEL: Record<string, string> = {
   pending: "Received",

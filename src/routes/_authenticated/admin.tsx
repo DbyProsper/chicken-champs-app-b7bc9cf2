@@ -10,6 +10,7 @@ import { fireNotification } from "@/lib/notifications";
 import { useBranch } from "@/lib/branch";
 import { getAccessRole } from "@/lib/roles";
 import { grantRoleByEmail } from "@/lib/admin.functions";
+import { getDeliveryStatusForOrderStatus, resolveOrderDisplayStatus } from "@/lib/delivery";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Champs Chicken" }, { name: "robots", content: "noindex" }] }),
@@ -24,7 +25,7 @@ type Order = {
   fulfillment: "pickup" | "delivery";
   delivery_notes: string | null;
   subtotal_cents: number;
-  status: "pending" | "preparing" | "ready" | "out_for_delivery" | "completed" | "cancelled";
+  status: "pending" | "preparing" | "ready" | "handed_to_driver" | "out_for_delivery" | "completed" | "cancelled";
   created_at: string;
   branch_id: string;
   pickup_pin: string;
@@ -33,7 +34,7 @@ type Order = {
 type ItemRow = { order_id: string; item_name: string; quantity: number; unit_price_cents: number };
 
 const PICKUP_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "completed"];
-const DELIVERY_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "out_for_delivery", "completed"];
+const DELIVERY_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "handed_to_driver", "completed"];
 const STATUS_META = {
   pending: { label: "New", icon: Clock, color: "bg-amber-500" },
   preparing: { label: "Preparing", icon: ChefHat, color: "bg-blue-500" },
@@ -64,14 +65,18 @@ function Admin() {
   const [grantRole, setGrantRole] = useState<"admin" | "staff">("admin");
   const [grantBusy, setGrantBusy] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [deliveryStatuses, setDeliveryStatuses] = useState<Record<string, string>>({});
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   async function load() {
-    const { data: os } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200);
+    const [{ data: os }, { data: deliveryRows }] = await Promise.all([
+      supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase.from("deliveries").select("order_id, status").neq("status", "delivered"),
+    ]);
     const list = (os as Order[]) ?? [];
     // Detect new pending orders for browser notifications + toast
     const newOnes = list.filter((o) => o.status === "pending" && !prevIdsRef.current.has(o.id));
@@ -83,6 +88,11 @@ function Admin() {
     }
     prevIdsRef.current = new Set(list.map((o) => o.id));
     setOrders(list);
+    const statusMap: Record<string, string> = {};
+    for (const row of (deliveryRows ?? []) as Array<{ order_id: string; status: string }>) {
+      if (row.order_id) statusMap[row.order_id] = row.status;
+    }
+    setDeliveryStatuses(statusMap);
     if (list.length) {
       const ids = list.map((o) => o.id);
       const { data: its } = await supabase.from("order_items").select("*").in("order_id", ids);
@@ -131,18 +141,23 @@ function Admin() {
 
   async function updateStatus(id: string, status: Order["status"]) {
     const current = orders.find((order) => order.id === id);
-    const nextStatus = current?.fulfillment === "delivery" && status === "ready" ? "out_for_delivery" : status;
+    const nextStatus = status === "handed_to_driver" ? "ready" : status;
     const { error } = await supabase.from("orders").update({ status: nextStatus }).eq("id", id);
     if (error) {
       toast.error(error.message);
       return;
     }
     if (current?.fulfillment === "delivery") {
-      await supabase.from("deliveries").update({ status: status === "ready" ? "handed_to_driver" : status === "completed" ? "delivered" : "accepted" } as never).eq("order_id", id);
+      const deliveryStatus = status === "handed_to_driver" ? "handed_to_driver" : getDeliveryStatusForOrderStatus(nextStatus);
+      if (deliveryStatus) {
+        await supabase.from("deliveries").update({ status: deliveryStatus } as never).eq("order_id", id);
+      }
     }
     setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, status: nextStatus } : order)));
     if (current?.fulfillment === "delivery" && status === "ready") {
-      toast.success("Marked handed to driver · order is now out for delivery");
+      toast.success("Marked ready · driver can pick it up once it is handed over");
+    } else if (current?.fulfillment === "delivery" && status === "handed_to_driver") {
+      toast.success("Marked handed to driver · the driver can now start the handoff flow");
     } else {
       toast.success(`Marked ${STATUS_META[nextStatus].label}`);
     }
@@ -158,8 +173,14 @@ function Admin() {
       .from("orders")
       .update({ verified_at: new Date().toISOString(), verified_by: u.user?.id, status: "completed" })
       .eq("id", order.id);
-    if (error) toast.error(error.message);
-    else toast.success(`Order ${order.order_number} verified & completed`);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    if (order.fulfillment === "delivery") {
+      await supabase.from("deliveries").update({ status: "delivered" } as never).eq("order_id", order.id);
+    }
+    toast.success(`Order ${order.order_number} verified & completed`);
   }
 
   async function signOut() {
@@ -204,10 +225,11 @@ function Admin() {
   }
 
   const filtered = orders.filter((o) => {
+    const displayStatus = resolveOrderDisplayStatus(o.status, deliveryStatuses[o.id]);
     if (branchFilter !== "all" && o.branch_id !== branchFilter) return false;
     if (filter === "all") return true;
-    if (filter === "active") return o.status !== "completed" && o.status !== "cancelled";
-    return o.status === filter;
+    if (filter === "active") return displayStatus !== "completed" && displayStatus !== "cancelled";
+    return displayStatus === filter;
   });
 
   const todayRevenueOrders = orders.filter((o) => {
@@ -217,9 +239,12 @@ function Admin() {
   });
 
   const stats = {
-    new: filtered.filter((o) => o.status === "pending").length,
-    prep: filtered.filter((o) => o.status === "preparing").length,
-    out: filtered.filter((o) => o.status === "out_for_delivery" || o.status === "ready").length,
+    new: filtered.filter((o) => resolveOrderDisplayStatus(o.status, deliveryStatuses[o.id]) === "pending").length,
+    prep: filtered.filter((o) => resolveOrderDisplayStatus(o.status, deliveryStatuses[o.id]) === "preparing").length,
+    out: filtered.filter((o) => {
+      const displayStatus = resolveOrderDisplayStatus(o.status, deliveryStatuses[o.id]);
+      return displayStatus === "out_for_delivery" || displayStatus === "handed_to_driver" || displayStatus === "ready";
+    }).length,
     revenue: todayRevenueOrders.reduce((s, o) => s + o.subtotal_cents, 0),
   };
 
@@ -337,7 +362,7 @@ function Admin() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {(["active", "pending", "preparing", "ready", "out_for_delivery", "completed", "all"] as const).map((f) => (
+          {(["active", "pending", "preparing", "ready", "handed_to_driver", "out_for_delivery", "completed", "all"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -362,6 +387,7 @@ function Admin() {
                 items={itemsByOrder[o.id] ?? []}
                 branchName={branch?.city ?? "—"}
                 branchPhone={branch?.phone ?? null}
+                deliveryStatus={deliveryStatuses[o.id]}
                 onUpdateStatus={updateStatus}
                 onVerify={verifyOrder}
               />
@@ -376,22 +402,23 @@ function Admin() {
 }
 
 function OrderCard({
-  order: o, items, branchName, branchPhone, onUpdateStatus, onVerify,
+  order: o, items, branchName, branchPhone, deliveryStatus, onUpdateStatus, onVerify,
 }: {
-  order: Order; items: ItemRow[]; branchName: string; branchPhone: string | null;
+  order: Order; items: ItemRow[]; branchName: string; branchPhone: string | null; deliveryStatus?: string | null;
   onUpdateStatus: (id: string, s: Order["status"]) => void;
   onVerify: (o: Order, pin: string) => void;
 }) {
-  const meta = STATUS_META[o.status];
+  const effectiveStatus = resolveOrderDisplayStatus(o.status, deliveryStatus) ?? o.status;
+  const meta = STATUS_META[effectiveStatus];
   const StatusIcon = meta.icon;
   const statusFlow = o.fulfillment === "pickup" ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
-  const currentIdx = statusFlow.indexOf(o.status);
+  const currentIdx = statusFlow.indexOf(effectiveStatus as Order["status"]);
   const next = currentIdx >= 0 && currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null;
-  const shouldShowNext = !(o.fulfillment === "delivery" && o.status === "out_for_delivery");
+  const shouldShowNext = !(o.fulfillment === "delivery" && (effectiveStatus === "handed_to_driver" || effectiveStatus === "out_for_delivery" || effectiveStatus === "completed"));
   const [pinInput, setPinInput] = useState("");
   const [showVerify, setShowVerify] = useState(false);
 
-  const waHref = waLink(o.customer_phone, orderStatusMessage(o.order_number, o.status, o.customer_name));
+  const waHref = waLink(o.customer_phone, orderStatusMessage(o.order_number, effectiveStatus, o.customer_name));
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
@@ -434,7 +461,7 @@ function OrderCard({
       </ul>
 
       {/* PIN verify */}
-      {!o.verified_at && (o.status === "out_for_delivery" || o.status === "ready") && (
+      {!o.verified_at && (effectiveStatus === "out_for_delivery" || effectiveStatus === "ready") && (
         <div className="mt-3 rounded-xl bg-brand/5 border border-brand/20 p-3">
           {!showVerify ? (
             <button onClick={() => setShowVerify(true)} className="w-full inline-flex items-center justify-center gap-2 text-xs font-bold text-brand">
@@ -468,14 +495,14 @@ function OrderCard({
           <a href={waHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-[#25D366] px-2.5 py-1.5 text-[11px] font-bold text-white hover:opacity-90">
             <MessageCircle className="h-3 w-3" /> WA
           </a>
-          {o.status !== "cancelled" && o.status !== "completed" && (
+          {effectiveStatus !== "cancelled" && effectiveStatus !== "completed" && (
             <button onClick={() => onUpdateStatus(o.id, "cancelled")} className="rounded-full border px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground hover:text-brand">
               Cancel
             </button>
           )}
           {next && shouldShowNext && (
             <button onClick={() => onUpdateStatus(o.id, next)} className="rounded-full bg-brand px-3 py-1.5 text-[11px] font-bold text-brand-foreground hover:bg-brand-dark">
-              → {STATUS_META[next].label}
+              → {STATUS_META[next as keyof typeof STATUS_META].label}
             </button>
           )}
         </div>

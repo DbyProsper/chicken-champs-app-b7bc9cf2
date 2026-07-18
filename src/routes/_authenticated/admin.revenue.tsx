@@ -11,6 +11,7 @@ export const Route = createFileRoute("/_authenticated/admin/revenue")({
 
 type Order = {
   id: string;
+  order_number: string;
   subtotal_cents: number;
   fulfillment: "pickup" | "delivery";
   created_at: string;
@@ -55,7 +56,7 @@ function RevenueOverviewPage() {
     let active = true;
     (async () => {
       const [ordersRes, branchesRes] = await Promise.all([
-        supabase.from("orders").select("id, subtotal_cents, fulfillment, created_at, branch_id, status").order("created_at", { ascending: false }),
+        supabase.from("orders").select("id, order_number, subtotal_cents, fulfillment, created_at, branch_id, status").order("created_at", { ascending: false }),
         supabase.from("branches").select("id, city").eq("is_active", true).order("sort_order"),
       ]);
       if (!active) return;
@@ -67,16 +68,16 @@ function RevenueOverviewPage() {
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     if (branchFilter !== "all" && order.branch_id !== branchFilter) return false;
-    if (order.status === "cancelled") return false;
     return matchesRevenueRange(order.created_at, range);
   }), [branchFilter, orders, range]);
 
-  const revenue = filteredOrders.reduce((sum, order) => sum + order.subtotal_cents, 0);
-  const deliveryRevenue = filteredOrders.filter((order) => order.fulfillment === "delivery").reduce((sum, order) => sum + order.subtotal_cents, 0);
-  const pickupRevenue = filteredOrders.filter((order) => order.fulfillment === "pickup").reduce((sum, order) => sum + order.subtotal_cents, 0);
-  const deliveryCount = filteredOrders.filter((order) => order.fulfillment === "delivery").length;
-  const pickupCount = filteredOrders.length - deliveryCount;
+  const revenue = filteredOrders.filter((order) => order.status !== "cancelled").reduce((sum, order) => sum + order.subtotal_cents, 0);
+  const deliveryRevenue = filteredOrders.filter((order) => order.fulfillment === "delivery" && order.status !== "cancelled").reduce((sum, order) => sum + order.subtotal_cents, 0);
+  const pickupRevenue = filteredOrders.filter((order) => order.fulfillment === "pickup" && order.status !== "cancelled").reduce((sum, order) => sum + order.subtotal_cents, 0);
+  const deliveryCount = filteredOrders.filter((order) => order.fulfillment === "delivery" && order.status !== "cancelled").length;
+  const pickupCount = filteredOrders.filter((order) => order.status !== "cancelled").length - deliveryCount;
   const selectedBranchLabel = branchFilter === "all" ? "All branches" : branches.find((branch) => branch.id === branchFilter)?.city ?? "Selected branch";
+  const branchLookup = new Map(branches.map((branch) => [branch.id, branch.city]));
 
   return (
     <div className="min-h-screen bg-muted/40 pb-20">
@@ -118,7 +119,7 @@ function RevenueOverviewPage() {
               <TrendingUp className="h-3.5 w-3.5" /> Sales revenue
             </div>
             <div className="mt-2 font-display text-3xl text-brand">{formatZAR(revenue)}</div>
-            <div className="mt-1 text-sm text-muted-foreground">{filteredOrders.length} orders in this view</div>
+            <div className="mt-1 text-sm text-muted-foreground">{filteredOrders.filter((order) => order.status !== "cancelled").length} completed orders in this view</div>
           </div>
           <div className="rounded-2xl border bg-card p-4">
             <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
@@ -135,6 +136,37 @@ function RevenueOverviewPage() {
             <div className="mt-1 text-sm text-muted-foreground">{pickupCount} pickup orders</div>
           </div>
         </div>
+
+        <section className="rounded-3xl border bg-card p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">All orders</div>
+              <div className="font-display text-xl text-brand">Compact view</div>
+            </div>
+            <div className="text-xs text-muted-foreground">{filteredOrders.length} orders</div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border">
+            <div className="grid grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_0.7fr] gap-2 bg-muted/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <div>Order</div>
+              <div>Branch</div>
+              <div>Type</div>
+              <div>Status</div>
+              <div className="text-right">Amount</div>
+            </div>
+            {filteredOrders.map((order) => (
+              <div key={order.id} className="grid grid-cols-[1.2fr_0.8fr_0.7fr_0.7fr_0.7fr] gap-2 border-t bg-background px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">#{order.order_number}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</div>
+                </div>
+                <div className="truncate text-muted-foreground">{branchLookup.get(order.branch_id) ?? "Branch"}</div>
+                <div className="capitalize text-muted-foreground">{order.fulfillment}</div>
+                <div className={order.status === "cancelled" ? "text-destructive" : "text-foreground"}>{order.status.replace(/_/g, " ")}</div>
+                <div className="text-right font-semibold">{formatZAR(order.subtotal_cents)}</div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

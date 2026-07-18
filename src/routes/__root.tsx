@@ -4,10 +4,11 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
@@ -15,6 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CartProvider } from "@/lib/cart";
 import { BranchProvider } from "@/lib/branch";
 import { supabase } from "@/integrations/supabase/client";
+import { Loader } from "@/components/Loader";
 
 function NotFoundComponent() {
   return (
@@ -91,6 +93,10 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  const routerStatus = useRouterState({ select: (state) => state.status });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const [showLoader, setShowLoader] = useState(true);
+
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
@@ -100,10 +106,25 @@ function RootComponent() {
     });
     return () => sub.subscription.unsubscribe();
   }, [queryClient, router]);
+
+  useEffect(() => {
+    if (pathname === "/cart") {
+      setShowLoader(false);
+      return;
+    }
+    if (routerStatus === "pending") {
+      setShowLoader(true);
+      return;
+    }
+    const id = window.setTimeout(() => setShowLoader(false), 220);
+    return () => window.clearTimeout(id);
+  }, [pathname, routerStatus]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BranchProvider>
         <CartProvider>
+          <Loader visible={showLoader} />
           <Outlet />
           <Toaster richColors position="top-center" />
         </CartProvider>
