@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { MapPin, Clock, ChevronRight, Flame, Sparkles, Phone } from "lucide-react";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
+import { Footer } from "@/components/Footer";
 import { useBranch } from "@/lib/branch";
 import { activePromotionsQuery } from "@/lib/user-queries";
 import { formatZAR } from "@/lib/format";
@@ -166,6 +167,7 @@ function Home() {
       </section>}
 
       <BottomNav />
+      <Footer />
     </div>
   );
 }

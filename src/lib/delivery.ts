@@ -16,6 +16,7 @@ export type DeliverySettings = {
   normal_capacity_max: number;
   peak_capacity_min: number;
   peak_capacity_max: number;
+  manual_peak_mode?: boolean;
 };
 
 export const DEFAULT_DELIVERY_SETTINGS: DeliverySettings = {
@@ -34,6 +35,7 @@ export const DEFAULT_DELIVERY_SETTINGS: DeliverySettings = {
   normal_capacity_max: 5,
   peak_capacity_min: 2,
   peak_capacity_max: 4,
+  manual_peak_mode: false,
 };
 
 export async function fetchDeliverySettings(): Promise<DeliverySettings> {
@@ -61,6 +63,7 @@ export async function fetchDeliverySettings(): Promise<DeliverySettings> {
     normal_capacity_max: num("normal_capacity_max", DEFAULT_DELIVERY_SETTINGS.normal_capacity_max),
     peak_capacity_min: num("peak_capacity_min", DEFAULT_DELIVERY_SETTINGS.peak_capacity_min),
     peak_capacity_max: num("peak_capacity_max", DEFAULT_DELIVERY_SETTINGS.peak_capacity_max),
+    manual_peak_mode: (d["manual_peak_mode"] == null ? DEFAULT_DELIVERY_SETTINGS.manual_peak_mode : Boolean(d["manual_peak_mode"])),
   };
 }
 
@@ -297,6 +300,7 @@ export const DELIVERY_STATUS_LABEL: Record<string, string> = {
 export type DeliveryMode = "normal" | "peak";
 
 export function computeMode(activeCount: number, s: DeliverySettings): DeliveryMode {
+  if (s.manual_peak_mode) return "peak";
   return activeCount >= s.peak_threshold ? "peak" : "normal";
 }
 

@@ -63,6 +63,8 @@ function DriverPage() {
   const [approvalBlocked, setApprovalBlocked] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<"settings" | "deliveries">("deliveries");
+  const [historyFilter, setHistoryFilter] = useState<"today" | "week" | "month" | "6months" | "year" | "custom">("week");
+  const [customRange, setCustomRange] = useState<{ from?: string; to?: string }>({});
   const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -276,8 +278,28 @@ function DriverPage() {
 
   const list = tab === "available" ? available : tab === "active" ? active : history;
   const deliveredMine = history;
-  const earningsCents = deliveredMine.reduce((sum, d) => sum + d.delivery_fee_cents, 0);
-  const collectedCents = deliveredMine.reduce((sum, d) => sum + ((d.payment_status === "paid") ? d.delivery_fee_cents : 0), 0);
+  function rangeForFilter(filter: typeof historyFilter) {
+    const now = new Date();
+    if (filter === "today") return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate()), to: now };
+    if (filter === "week") { const d = new Date(now); d.setDate(now.getDate() - 7); return { from: d, to: now }; }
+    if (filter === "month") { const d = new Date(now); d.setMonth(now.getMonth() - 1); return { from: d, to: now }; }
+    if (filter === "6months") { const d = new Date(now); d.setMonth(now.getMonth() - 6); return { from: d, to: now }; }
+    if (filter === "year") { const d = new Date(now); d.setFullYear(now.getFullYear() - 1); return { from: d, to: now }; }
+    if (filter === "custom") {
+      const from = customRange.from ? new Date(customRange.from) : new Date(0);
+      const to = customRange.to ? new Date(customRange.to) : new Date();
+      return { from, to };
+    }
+    return { from: new Date(0), to: new Date() };
+  }
+
+  const { from: _from, to: _to } = rangeForFilter(historyFilter);
+  const deliveredFiltered = deliveredMine.filter((d) => {
+    const created = new Date(d.created_at);
+    return created >= _from && created <= _to;
+  });
+  const earningsCents = deliveredFiltered.reduce((sum, d) => sum + d.delivery_fee_cents, 0);
+  const collectedCents = deliveredFiltered.reduce((sum, d) => sum + ((d.payment_status === "paid") ? d.delivery_fee_cents : 0), 0);
 
   return (
     <div className="min-h-screen bg-muted/40 pb-20">
@@ -310,7 +332,7 @@ function DriverPage() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4 space-y-3">
-        {tab === "history" && (
+        {tab === "history" && activeTab === "deliveries" && (
           <div className="rounded-2xl border bg-card p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -320,6 +342,22 @@ function DriverPage() {
               </div>
               <Landmark className="h-8 w-8 text-brand" />
             </div>
+          </div>
+        )}
+
+        {tab === "history" && activeTab === "deliveries" && (
+          <div className="rounded-2xl border bg-card p-3 flex items-center gap-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filter</div>
+            {(["today", "week", "month", "6months", "year"] as const).map((f) => (
+              <button key={f} onClick={() => setHistoryFilter(f)} className={"rounded-full px-3 py-1 text-xs font-bold " + (historyFilter === f ? "bg-brand text-brand-foreground" : "bg-background border")}>{f}</button>
+            ))}
+            <button onClick={() => setHistoryFilter("custom")} className={"rounded-full px-3 py-1 text-xs font-bold " + (historyFilter === "custom" ? "bg-brand text-brand-foreground" : "bg-background border")}>Custom</button>
+            {historyFilter === "custom" && (
+              <div className="ml-auto flex items-center gap-2">
+                <input type="date" value={customRange.from ?? ""} onChange={(e) => setCustomRange((c) => ({ ...c, from: e.target.value }))} className="rounded-md border px-2 py-1 text-sm" />
+                <input type="date" value={customRange.to ?? ""} onChange={(e) => setCustomRange((c) => ({ ...c, to: e.target.value }))} className="rounded-md border px-2 py-1 text-sm" />
+              </div>
+            )}
           </div>
         )}
         {activeTab === "settings" && (

@@ -216,10 +216,13 @@ function OrderPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-2 grid grid-cols-4 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-center">
-              {isDelivery
-                ? (<><span>Received</span><span>Preparing</span><span>Out</span><span>Delivered</span></>)
-                : (<><span>Received</span><span>Preparing</span><span>Ready</span><span>Collected</span></>)}
+            <div
+              className="mt-2 grid text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-center"
+              style={{ gridTemplateColumns: `repeat(${STATUS_STEPS.length}, minmax(0, 1fr))` }}
+            >
+              {STATUS_STEPS.map((s) => (
+                <div key={s}>{STATUS_LABEL[s] ?? s}</div>
+              ))}
             </div>
           </div>
         )}

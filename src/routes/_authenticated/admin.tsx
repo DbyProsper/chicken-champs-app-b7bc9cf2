@@ -66,6 +66,7 @@ function Admin() {
   const [grantBusy, setGrantBusy] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deliveryStatuses, setDeliveryStatuses] = useState<Record<string, string>>({});
+  const [manualPeak, setManualPeak] = useState<boolean>(false);
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   async function load() {
@@ -76,6 +77,7 @@ function Admin() {
         .order("created_at", { ascending: false })
         .limit(200),
       supabase.from("deliveries").select("order_id, status").neq("status", "delivered"),
+      supabase.from("delivery_settings").select("manual_peak_mode").eq("id", "default").maybeSingle(),
     ]);
     const list = (os as Order[]) ?? [];
     // Detect new pending orders for browser notifications + toast
@@ -93,6 +95,12 @@ function Admin() {
       if (row.order_id) statusMap[row.order_id] = row.status;
     }
     setDeliveryStatuses(statusMap);
+    // delivery_settings (manual peak)
+    try {
+      // @ts-ignore
+      const manual = (os && (await supabase.from("delivery_settings").select("manual_peak_mode").eq("id", "default").maybeSingle())) as any;
+      if (manual && manual.data) setManualPeak(Boolean(manual.data.manual_peak_mode));
+    } catch {}
     if (list.length) {
       const ids = list.map((o) => o.id);
       const { data: its } = await supabase.from("order_items").select("*").in("order_id", ids);
@@ -135,6 +143,7 @@ function Admin() {
       .channel("orders-admin")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "deliveries" }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [role]);
@@ -200,6 +209,17 @@ function Admin() {
       toast.error(err.message ?? "Could not grant access");
     } finally {
       setGrantBusy(false);
+    }
+  }
+
+  async function toggleManualPeak() {
+    try {
+      const { error } = await supabase.from("delivery_settings").update({ manual_peak_mode: !manualPeak } as any).eq("id", "default");
+      if (error) throw error;
+      setManualPeak(!manualPeak);
+      toast.success(!manualPeak ? "Peak mode enabled" : "Peak mode disabled");
+    } catch (err: any) {
+      toast.error(err.message ?? "Could not toggle peak mode");
     }
   }
 
@@ -274,6 +294,7 @@ function Admin() {
               <TrendingUp className="h-3.5 w-3.5" /> Revenue
             </Link>
             <button onClick={load} className="grid h-8 w-8 place-items-center rounded-full border hover:bg-accent"><RefreshCw className="h-4 w-4" /></button>
+            <button onClick={toggleManualPeak} title="Toggle peak mode" className={"grid h-8 w-8 place-items-center rounded-full border hover:bg-accent " + (manualPeak ? "bg-amber-500 text-white" : "")}>{manualPeak ? <Sparkles className="h-4 w-4" /> : <Clock className="h-4 w-4" />}</button>
             <button onClick={signOut} className="grid h-8 w-8 place-items-center rounded-full border hover:bg-accent"><LogOut className="h-4 w-4" /></button>
           </div>
         </div>

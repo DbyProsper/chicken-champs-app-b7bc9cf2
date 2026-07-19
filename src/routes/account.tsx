@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { LogOut, Package, Repeat, Sparkles, ShieldCheck, ChevronRight, Bike } from "lucide-react";
 import { Header } from "@/components/Header";
 import { BottomNav } from "@/components/BottomNav";
+import { Footer } from "@/components/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { myOrdersQuery, activePromotionsQuery } from "@/lib/user-queries";
 import { menuQuery } from "@/lib/menu-queries";
@@ -281,6 +282,7 @@ function Account() {
       </div>
 
       <BottomNav />
+      <Footer />
     </div>
   );
 }

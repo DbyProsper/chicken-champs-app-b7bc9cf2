@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrackRouteImport } from './routes/track'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as MenuRouteImport } from './routes/menu'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CartRouteImport } from './routes/cart'
@@ -30,6 +31,11 @@ import { Route as AuthenticatedAdminAppearanceRouteImport } from './routes/_auth
 const TrackRoute = TrackRouteImport.update({
   id: '/track',
   path: '/track',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MenuRoute = MenuRouteImport.update({
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/menu': typeof MenuRoute
+  '/privacy': typeof PrivacyRoute
   '/track': typeof TrackRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/driver': typeof AuthenticatedDriverRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/menu': typeof MenuRoute
+  '/privacy': typeof PrivacyRoute
   '/track': typeof TrackRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/driver': typeof AuthenticatedDriverRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
   '/menu': typeof MenuRoute
+  '/privacy': typeof PrivacyRoute
   '/track': typeof TrackRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/driver': typeof AuthenticatedDriverRoute
@@ -182,6 +191,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/menu'
+    | '/privacy'
     | '/track'
     | '/admin'
     | '/driver'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/menu'
+    | '/privacy'
     | '/track'
     | '/admin'
     | '/driver'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/cart'
     | '/checkout'
     | '/menu'
+    | '/privacy'
     | '/track'
     | '/_authenticated/admin'
     | '/_authenticated/driver'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
   MenuRoute: typeof MenuRoute
+  PrivacyRoute: typeof PrivacyRoute
   TrackRoute: typeof TrackRoute
   OrderNumberRoute: typeof OrderNumberRoute
 }
@@ -250,6 +263,13 @@ declare module '@tanstack/react-router' {
       path: '/track'
       fullPath: '/track'
       preLoaderRoute: typeof TrackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/menu': {
@@ -410,6 +430,7 @@ const rootRouteChildren: RootRouteChildren = {
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
   MenuRoute: MenuRoute,
+  PrivacyRoute: PrivacyRoute,
   TrackRoute: TrackRoute,
   OrderNumberRoute: OrderNumberRoute,
 }
