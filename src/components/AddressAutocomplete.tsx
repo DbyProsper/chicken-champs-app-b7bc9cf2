@@ -132,10 +132,9 @@ export function AddressAutocomplete({
       await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
       const label = place.displayName ?? place.formattedAddress ?? `${s.text}${s.secondary ? ` · ${s.secondary}` : ""}`;
       const loc = place.location;
-      // Call onSelect first so parent can treat this as a selection (avoid clearing calculations),
-      // then update the input value via onChange.
-      if (loc) onSelect({ address: label, lat: loc.lat(), lng: loc.lng() });
+      // Update the input value first, then notify parent of a confirmed selection.
       onChange(label);
+      if (loc) onSelect({ address: label, lat: loc.lat(), lng: loc.lng() });
       tokenRef.current = null;
     } catch {
       const fallback = `${s.text}${s.secondary ? ` · ${s.secondary}` : ""}`;
