@@ -150,6 +150,14 @@ function Admin() {
 
   async function updateStatus(id: string, status: Order["status"]) {
     const current = orders.find((order) => order.id === id);
+    // Prevent marking handed_to_driver when no driver is assigned to the delivery
+    if (status === "handed_to_driver") {
+      const assignedDeliveryStatus = deliveryStatuses[id];
+      if (!assignedDeliveryStatus) {
+        toast.error("Cannot mark handed to driver: no driver assigned");
+        return;
+      }
+    }
     const nextStatus = status === "handed_to_driver" ? "ready" : status;
     const { error } = await supabase.from("orders").update({ status: nextStatus }).eq("id", id);
     if (error) {
@@ -537,7 +545,15 @@ function OrderCard({
             </button>
           )}
           {next && shouldShowNext && (
-            <button onClick={() => onUpdateStatus(o.id, next)} className="rounded-full bg-brand px-3 py-1.5 text-[11px] font-bold text-brand-foreground hover:bg-brand-dark">
+            <button
+              onClick={() => onUpdateStatus(o.id, next)}
+              disabled={next === "handed_to_driver" && !deliveryStatus}
+              title={next === "handed_to_driver" && !deliveryStatus ? "Assign a driver before handing to driver" : undefined}
+              className={
+                "rounded-full bg-brand px-3 py-1.5 text-[11px] font-bold text-brand-foreground hover:bg-brand-dark " +
+                (next === "handed_to_driver" && !deliveryStatus ? "opacity-50 cursor-not-allowed" : "")
+              }
+            >
               → {STATUS_META[next as keyof typeof STATUS_META].label}
             </button>
           )}

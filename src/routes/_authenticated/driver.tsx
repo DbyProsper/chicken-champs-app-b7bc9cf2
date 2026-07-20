@@ -304,10 +304,10 @@ function DriverPage() {
     <div className="min-h-screen bg-muted/40 pb-20">
       <header className="sticky top-0 z-30 border-b bg-background">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <div className="font-display text-xl text-brand inline-flex items-center gap-2">
+          <Link to="/" className="font-display text-xl text-brand inline-flex items-center gap-2">
             <img src="/images/champs/champs-logo.png" alt="Champs Chicken" className="h-8 w-auto" />
             <span>Driver</span>
-          </div>
+          </Link>
           <div className="flex items-center gap-2">
             <button onClick={toggleStatus} className={"rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider " + (driver?.status === "active" ? "bg-emerald-600 text-white" : "border bg-background text-muted-foreground")}>
               {driver?.status === "active" ? "Online" : "Offline"}
@@ -475,20 +475,24 @@ function DriverPage() {
                 {tab === "available" ? (
                 <button onClick={() => accept(d)} className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground">Accept order</button>
               ) : tab === "active" && d.status !== "delivered" ? (
-                <div className="space-y-2">
-                  {d.payment_status === "pending" && (
-                    <button onClick={() => confirmPayment(d.id)} className="w-full rounded-xl border border-emerald-600 px-3 py-3 text-sm font-bold text-emerald-700 inline-flex items-center justify-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" /> Confirm payment received
+                d.status === "cancelled" ? (
+                  <div className="rounded-xl bg-destructive/10 border border-destructive/30 px-3 py-3 text-sm font-semibold text-destructive">This delivery was cancelled. No further actions are available.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {d.payment_status === "pending" && (
+                      <button onClick={() => confirmPayment(d.id)} className="w-full rounded-xl border border-emerald-600 px-3 py-3 text-sm font-bold text-emerald-700 inline-flex items-center justify-center gap-2">
+                        <CheckCircle2 className="h-4 w-4" /> Confirm payment received
+                      </button>
+                    )}
+                    <button
+                      onClick={() => nextStatus(d)}
+                      disabled={d.status !== "handed_to_driver" && d.status !== "picked_up" && d.status !== "on_the_way"}
+                      className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {d.status === "handed_to_driver" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Waiting for handoff"}
                     </button>
-                  )}
-                  <button
-                    onClick={() => nextStatus(d)}
-                    disabled={d.status !== "handed_to_driver" && d.status !== "picked_up" && d.status !== "on_the_way"}
-                    className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-brand-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {d.status === "handed_to_driver" ? "Mark picked up" : d.status === "picked_up" ? "Start delivery" : d.status === "on_the_way" ? "Mark delivered" : "Waiting for handoff"}
-                  </button>
-                </div>
+                  </div>
+                )
               ) : null}
             </div>
           );

@@ -13,6 +13,7 @@ import { getAccessRole } from "@/lib/roles";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
 import { requestDriverApplication } from "@/lib/admin.functions";
+import { getMenuImageForItem } from "@/lib/menu-images";
 import { AccountPageSkeleton } from "@/components/Loader";
 
 export const Route = createFileRoute("/account")({
@@ -34,35 +35,60 @@ function Account() {
   const [driverBusy, setDriverBusy] = useState(false);
   const [checking, setChecking] = useState(true);
 
+  async function loadAccount() {
+    setChecking(true);
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) {
+      setUserId(null);
+      setProfile(null);
+      setIsStaff(false);
+      setIsDriver(false);
+      setDriverApplication(null);
+      setChecking(false);
+      return;
+    }
+
+    setUserId(u.user.id);
+    const [{ data: p }, role, { data: branchData }] = await Promise.all([
+      supabase.from("profiles").select("full_name, phone").eq("id", u.user.id).maybeSingle(),
+      getAccessRole(u.user.id),
+      supabase.from("branches").select("id, name, city").eq("is_active", true).order("sort_order"),
+    ]);
+    setProfile(p);
+    setIsStaff(role === "admin" || role === "staff");
+    const driverRole = role === "driver";
+    let resolvedIsDriver = driverRole;
+    if (!driverRole) {
+      const { data: driverRow, error: driverError } = await supabase.from("drivers").select("id").eq("user_id", u.user.id).maybeSingle();
+      if (driverRow && !driverError) resolvedIsDriver = true;
+    }
+    setIsDriver(resolvedIsDriver);
+    setBranches((branchData ?? []) as Array<{ id: string; name: string; city: string }>);
+    setDriverForm((f) => ({ ...f, name: p?.full_name || "", phone: p?.phone || "" }));
+    const { data: app } = await supabase.from("driver_applications").select("status, admin_notes").eq("user_id", u.user.id).maybeSingle();
+    setDriverApplication(app);
+    setChecking(false);
+  }
+
   useEffect(() => {
-    (async () => {
-      const { data: u } = await supabase.auth.getUser();
-      if (!u.user) {
+    loadAccount();
+    const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setUserId(null);
+        setProfile(null);
+        setIsStaff(false);
+        setIsDriver(false);
+        setDriverApplication(null);
+        setChecking(false);
         nav({ to: "/auth" });
         return;
       }
-      setUserId(u.user.id);
-      const [{ data: p }, role, { data: branchData }] = await Promise.all([
-        supabase.from("profiles").select("full_name, phone").eq("id", u.user.id).maybeSingle(),
-        getAccessRole(u.user.id),
-        supabase.from("branches").select("id, name, city").eq("is_active", true).order("sort_order"),
-      ]);
-      setProfile(p);
-      setIsStaff(role === "admin" || role === "staff");
-      const driverRole = role === "driver";
-      let resolvedIsDriver = driverRole;
-      if (!driverRole) {
-        const { data: driverRow, error: driverError } = await supabase.from("drivers").select("id").eq("user_id", u.user.id).maybeSingle();
-        if (driverRow && !driverError) resolvedIsDriver = true;
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        loadAccount();
       }
-      setIsDriver(resolvedIsDriver);
-      setBranches((branchData ?? []) as Array<{ id: string; name: string; city: string }>);
-      setDriverForm((f) => ({ ...f, name: p?.full_name || "", phone: p?.phone || "" }));
-      const { data: app } = await supabase.from("driver_applications").select("status, admin_notes").eq("user_id", u.user.id).maybeSingle();
-      setDriverApplication(app);
-      setChecking(false);
-    })();
-  }, [nav]);
+    });
+    return () => subscription?.subscription.unsubscribe();
+  }, []);
 
   const { data: orders = [] } = useQuery(myOrdersQuery(userId));
   const { data: menu } = useQuery(menuQuery);
@@ -91,7 +117,12 @@ function Account() {
 
   async function signOut() {
     await supabase.auth.signOut();
-    nav({ to: "/" });
+    setUserId(null);
+    setProfile(null);
+    setIsStaff(false);
+    setIsDriver(false);
+    setDriverApplication(null);
+    nav({ to: "/auth" });
   }
 
   async function reorder(orderId: string) {
@@ -117,6 +148,8 @@ function Account() {
   async function requestDriverAccess(e: React.FormEvent) {
     e.preventDefault();
     if (!driverForm.name.trim() || !driverForm.phone.trim()) return toast.error("Name and phone are required");
+    // If student number not provided, require valid SA ID (13 digits)
+    if (!driverForm.student_number.trim() && !/^\d{13}$/.test(driverForm.id_number.trim())) return toast.error("Valid SA ID number is required (13 digits) or provide a student number");
     setDriverBusy(true);
     try {
       await requestDriverApplication({ data: { name: driverForm.name, phone: driverForm.phone, idNumber: driverForm.id_number || undefined, studentNumber: driverForm.student_number || undefined, profilePhotoUrl: driverForm.profile_photo_url || undefined, selfieUrl: driverForm.selfie_url || undefined, branchId: driverForm.branch_id || undefined, bankName: driverForm.bank_name, bankAccountNumber: driverForm.bank_account_number, bankAccountHolder: driverForm.bank_account_holder } });
@@ -130,6 +163,27 @@ function Account() {
   }
 
   if (checking) return <AccountPageSkeleton />;
+
+  if (!userId) {
+    return (
+      <div className="min-h-screen pb-24">
+        <Header subtitle="My Account" />
+        <div className="mx-auto max-w-lg px-4 py-20 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground">
+            <Package className="h-4 w-4 text-brand" />
+            Sign in to access your account and driver application
+          </div>
+          <div className="mt-6 rounded-3xl border border-border bg-background p-8">
+            <h1 className="font-display text-2xl text-brand">Welcome back</h1>
+            <p className="mt-3 text-sm text-muted-foreground">Sign in to view order history, apply to become a driver, and manage your profile.</p>
+            <Link to="/auth" className="mt-6 inline-flex rounded-full bg-brand px-5 py-3 text-sm font-bold text-brand-foreground">Sign in</Link>
+          </div>
+        </div>
+        <BottomNav />
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-24">
@@ -216,22 +270,13 @@ function Account() {
                 {driverApplication.admin_notes && <div className="mt-1 text-xs text-muted-foreground">{driverApplication.admin_notes}</div>}
               </div>
             ) : (
-              <form onSubmit={requestDriverAccess} className="space-y-2">
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Full name" value={driverForm.name} onChange={(e) => setDriverForm({ ...driverForm, name: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Phone" value={driverForm.phone} onChange={(e) => setDriverForm({ ...driverForm, phone: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="ID or student number" value={driverForm.id_number} onChange={(e) => setDriverForm({ ...driverForm, id_number: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Student number (optional)" value={driverForm.student_number} onChange={(e) => setDriverForm({ ...driverForm, student_number: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Profile photo URL (optional)" value={driverForm.profile_photo_url} onChange={(e) => setDriverForm({ ...driverForm, profile_photo_url: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Selfie URL (optional)" value={driverForm.selfie_url} onChange={(e) => setDriverForm({ ...driverForm, selfie_url: e.target.value })} />
-                <select className="w-full rounded-xl border bg-background px-3 py-2 text-sm" value={driverForm.branch_id} onChange={(e) => setDriverForm({ ...driverForm, branch_id: e.target.value })}>
-                  <option value="">Choose a branch</option>
-                  {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name} · {branch.city}</option>)}
-                </select>
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Bank" value={driverForm.bank_name} onChange={(e) => setDriverForm({ ...driverForm, bank_name: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account number" value={driverForm.bank_account_number} onChange={(e) => setDriverForm({ ...driverForm, bank_account_number: e.target.value })} />
-                <input className="w-full rounded-xl border bg-background px-3 py-2 text-sm" placeholder="Account holder" value={driverForm.bank_account_holder} onChange={(e) => setDriverForm({ ...driverForm, bank_account_holder: e.target.value })} />
-                <button disabled={driverBusy} className="w-full rounded-full bg-brand px-4 py-2.5 text-sm font-bold text-brand-foreground disabled:opacity-60">{driverBusy ? "Sending…" : "Request driver access"}</button>
-              </form>
+              <div className="space-y-2">
+                <p className="text-sm">Ready to apply? Click below to open the driver application form.</p>
+                <Link to="/become-driver" className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-bold text-brand-foreground">Apply to become a driver</Link>
+                {!userId && (
+                  <div className="mt-2 text-xs text-muted-foreground">You should <Link to="/auth" className="underline text-brand">sign in</Link> to apply and save your application.</div>
+                )}
+              </div>
             )}
           </section>
         )}

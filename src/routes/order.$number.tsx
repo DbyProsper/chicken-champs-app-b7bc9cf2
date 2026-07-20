@@ -236,9 +236,8 @@ function OrderPage() {
                 <div className="font-display text-lg text-brand">{driver.name}</div>
                 <a href={`tel:${driver.phone}`} className="text-xs text-muted-foreground underline">{driver.phone}</a>
               </div>
-              <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-bold uppercase text-brand">{d?.status ?? "assigned"}</span>
+                  <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-bold uppercase text-brand">{d?.status ?? "assigned"}</span>
             </div>
-
             {(driver.bank_name || driver.bank_account_number) && (
               <div className="rounded-xl bg-muted/40 p-3 text-sm">
                 <div className="flex items-center gap-2 font-bold text-brand"><Landmark className="h-4 w-4" /> Pay your driver directly</div>

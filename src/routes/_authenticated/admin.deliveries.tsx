@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Bike, Plus, Trash2, Loader2, Phone, Zap } from "lucide-react";
+import { ArrowLeft, Bike, Plus, Trash2, Loader2, Phone, Zap, MoreVertical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { formatZAR } from "@/lib/format";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/admin/deliveries")({
   component: DeliveriesPage,
 });
 
-type Driver = { id: string; user_id: string | null; name: string; phone: string; status: string; approval_status?: string | null; branch_id: string | null };
+type Driver = { id: string; user_id: string | null; name: string; phone: string; status: string; approval_status?: string | null; branch_id: string | null; bank_name?: string | null; bank_account_number?: string | null; bank_account_holder?: string | null };
 type Delivery = {
   id: string;
   order_id: string;
@@ -44,6 +44,7 @@ function DeliveriesPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [applications, setApplications] = useState<DriverApplication[]>([]);
+  const [expandedDriverId, setExpandedDriverId] = useState<string | null>(null);
   const [orders, setOrders] = useState<Record<string, Order>>({});
   const [branches, setBranches] = useState<Record<string, Branch>>({});
   const [settings, setSettings] = useState<DeliverySettings>(DEFAULT_DELIVERY_SETTINGS);
@@ -55,14 +56,21 @@ function DeliveriesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    console.info("admin deliveries load start");
     const [directoryResult, { data: dels }, { data: bs }, s] = await Promise.all([
-      listDriversForAdmin({ data: {} }).catch(() => ({ ok: false, drivers: [], applications: [] })),
+      listDriversForAdmin({ data: {} }).catch((err) => {
+        console.error("listDriversForAdmin failed", err);
+        toast.error("Could not load driver directory");
+        return { ok: false, drivers: [], applications: [] };
+      }),
       supabase.from("deliveries").select("id, order_id, driver_id, status, distance_km, delivery_fee_cents, created_at, batch_id, queue_position, estimated_eta_min, estimated_eta_max").order("created_at", { ascending: false }).limit(100),
       supabase.from("branches").select("id, name, city").eq("is_active", true).order("sort_order"),
       fetchDeliverySettings().catch(() => DEFAULT_DELIVERY_SETTINGS),
     ]);
+    console.info("admin deliveries directory result", directoryResult);
     const adminDirectory = (directoryResult as any)?.data ?? directoryResult;
     const driverRows = ((adminDirectory as any)?.drivers ?? []) as Driver[];
+    console.info("admin deliveries directory driverRows length", driverRows.length);
     setDrivers(driverRows);
     setApplications(((adminDirectory as any)?.applications ?? []) as DriverApplication[]);
     const dl = (dels ?? []) as Delivery[];
@@ -265,24 +273,37 @@ function DeliveriesPage() {
           <div className="mt-4 divide-y">
             {drivers.length === 0 && <div className="py-6 text-center text-sm text-muted-foreground">No drivers yet.</div>}
             {drivers.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-sm">{d.name}</div>
-                  <div className="text-xs text-muted-foreground inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {d.phone}{d.branch_id && branches[d.branch_id] ? ` · ${branches[d.branch_id].name}` : ""}</div>
+              <div key={d.id} className="space-y-2 rounded-2xl border border-muted/30 p-3">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-sm">{d.name}</div>
+                    <div className="text-xs text-muted-foreground inline-flex items-center gap-1"><Phone className="h-3 w-3" /> {d.phone}{d.branch_id && branches[d.branch_id] ? ` · ${branches[d.branch_id].name}` : ""}</div>
+                  </div>
+                  <select value={d.branch_id ?? ""} onChange={async (e) => {
+                    const { error } = await supabase.from("drivers").update({ branch_id: e.target.value || null } as never).eq("id", d.id);
+                    if (error) toast.error(error.message);
+                    else {
+                      setDrivers((prev) => prev.map((item) => item.id === d.id ? { ...item, branch_id: e.target.value || null } : item));
+                      toast.success("Driver branch updated");
+                    }
+                  }} className="rounded-xl border border-input bg-background px-3 py-2 text-sm">
+                    <option value="">No branch</option>
+                    {Object.values(branches).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <span className={"rounded-full px-2 py-0.5 text-[10px] font-bold uppercase " + (d.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{d.approval_status ?? d.status}</span>
+                  <button onClick={() => setExpandedDriverId((prev) => (prev === d.id ? null : d.id))} className="grid h-8 w-8 place-items-center rounded-full border text-muted-foreground hover:bg-muted">
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
                 </div>
-                <select value={d.branch_id ?? ""} onChange={async (e) => {
-                  const { error } = await supabase.from("drivers").update({ branch_id: e.target.value || null } as never).eq("id", d.id);
-                  if (error) toast.error(error.message);
-                  else {
-                    setDrivers((prev) => prev.map((item) => item.id === d.id ? { ...item, branch_id: e.target.value || null } : item));
-                    toast.success("Driver branch updated");
-                  }
-                }} className="rounded-xl border border-input bg-background px-3 py-2 text-sm">
-                  <option value="">No branch</option>
-                  {Object.values(branches).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-                <span className={"rounded-full px-2 py-0.5 text-[10px] font-bold uppercase " + (d.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground")}>{d.approval_status ?? d.status}</span>
-                <button onClick={() => removeDriver(d.id)} className="grid h-8 w-8 place-items-center rounded-full border text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                {expandedDriverId === d.id && (
+                  <div className="rounded-2xl bg-muted/50 p-3 text-sm text-muted-foreground">
+                    {d.bank_name ? <div><span className="font-semibold text-foreground">Bank:</span> {d.bank_name}</div> : null}
+                    {d.bank_account_number ? <div><span className="font-semibold text-foreground">Account:</span> {d.bank_account_number}</div> : null}
+                    {d.bank_account_holder ? <div><span className="font-semibold text-foreground">Holder:</span> {d.bank_account_holder}</div> : null}
+                    {!d.bank_name && !d.bank_account_number && !d.bank_account_holder && <div>No banking details provided.</div>}
+                    <button onClick={() => removeDriver(d.id)} className="mt-3 rounded-full border border-destructive/50 px-3 py-1.5 text-xs font-semibold text-destructive">Delete driver</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -46,21 +46,45 @@ async function resolveAccessRole(context: { supabase: { rpc: (name: string) => P
 }
 
 async function getVisibleDriversForAdmin() {
-  const [{ data: drivers }, { data: applications }] = await Promise.all([
-    supabaseAdmin.from("drivers").select("id,user_id,name,phone,status,branch_id,created_at,updated_at").order("created_at", { ascending: false }),
+  let driverRows: Array<{ id: string; user_id: string | null; name: string; phone: string; status: string; branch_id: string | null; bank_name: string | null; bank_account_number: string | null; bank_account_holder: string | null; created_at: string; updated_at: string }> = [];
+  let applicationRows: Array<{ id: string; user_id: string; name: string; phone: string; branch_id: string | null; bank_name: string | null; bank_account_number: string | null; bank_account_holder: string | null; status: string; created_at: string; admin_notes: string | null }> = [];
+
+  const [{ data: drivers, error: driversError }, { data: applications, error: applicationsError }] = await Promise.all([
+    // include banking fields so admin UI can show full driver info
+    supabaseAdmin
+      .from("drivers")
+      .select("id,user_id,name,phone,status,branch_id,bank_name,bank_account_number,bank_account_holder,approval_status,created_at,updated_at")
+      .order("created_at", { ascending: false }),
     supabaseAdmin.from("driver_applications").select("id,user_id,name,phone,branch_id,bank_name,bank_account_number,bank_account_holder,status,created_at,admin_notes").order("created_at", { ascending: false }),
   ]);
 
-  const driverRows = (drivers ?? []) as Array<{ id: string; user_id: string | null; name: string; phone: string; status: string; branch_id: string | null; created_at: string; updated_at: string }>;
-  const applicationRows = (applications ?? []) as Array<{ id: string; user_id: string; name: string; phone: string; branch_id: string | null; bank_name: string | null; bank_account_number: string | null; bank_account_holder: string | null; status: string; created_at: string; admin_notes: string | null }>;
+  if (driversError) {
+    throw driversError;
+  }
+  if (applicationsError) {
+    throw applicationsError;
+  }
+
+  driverRows = (drivers ?? []) as typeof driverRows;
+  applicationRows = (applications ?? []) as typeof applicationRows;
 
   if (driverRows.length === 0) {
     return { drivers: driverRows, applications: applicationRows };
   }
 
-  const { data: roleRows } = await supabaseAdmin.from("user_roles").select("user_id, role").in("user_id", driverRows.map((row) => row.user_id).filter(Boolean) as string[]);
+  const userIds = driverRows.map((row) => row.user_id).filter(Boolean) as string[];
+  let roleRows: Array<{ user_id: string; role: string }> = [];
+  if (userIds.length > 0) {
+    try {
+      const { data } = await supabaseAdmin.from("user_roles").select("user_id, role").in("user_id", userIds);
+      roleRows = (data ?? []) as Array<{ user_id: string; role: string }>;
+    } catch {
+      roleRows = [];
+    }
+  }
+
   const roleMap = new Map<string, string[]>();
-  for (const row of (roleRows ?? []) as Array<{ user_id: string; role: string }>) {
+  for (const row of roleRows) {
     const list = roleMap.get(row.user_id) ?? [];
     list.push(row.role);
     roleMap.set(row.user_id, list);
