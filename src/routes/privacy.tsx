@@ -36,7 +36,7 @@ export default function PrivacyPage() {
           <h2 className="font-semibold mt-4">Your Choices</h2>
           <p className="text-sm">You can request to view, correct, or delete your personal data by contacting us. You can also opt out of marketing communications.</p>
           <h2 className="font-semibold mt-4">Contact</h2>
-          <p className="text-sm">Questions or requests about this policy can be sent to info@champs.example</p>
+          <p className="text-sm">Questions or requests about this policy can be sent to champsalice@gmail.com</p>
         </div>
       </div>
       <Footer />

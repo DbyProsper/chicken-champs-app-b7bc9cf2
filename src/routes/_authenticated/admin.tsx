@@ -157,7 +157,11 @@ function Admin() {
       return;
     }
     if (current?.fulfillment === "delivery") {
-      const deliveryStatus = status === "handed_to_driver" ? "handed_to_driver" : getDeliveryStatusForOrderStatus(nextStatus);
+      const deliveryStatus = status === "handed_to_driver"
+        ? "handed_to_driver"
+        : status === "cancelled"
+        ? "cancelled"
+        : getDeliveryStatusForOrderStatus(nextStatus);
       if (deliveryStatus) {
         await supabase.from("deliveries").update({ status: deliveryStatus } as never).eq("order_id", id);
       }
@@ -302,16 +306,27 @@ function Admin() {
 
       <div className="mx-auto max-w-6xl px-4 py-4">
         <div className="lg:flex lg:items-start lg:gap-6">
-          <aside className="mb-4 w-full lg:mb-0 lg:w-56 lg:shrink-0">
+          <aside className="hidden md:block mb-4 w-full lg:mb-0 lg:w-56 lg:shrink-0">
             <div className="rounded-2xl border bg-card p-3 lg:sticky lg:top-[68px]">
-              <button
-                type="button"
-                onClick={() => setSidebarCollapsed((value) => !value)}
-                className="mb-3 flex w-full items-center justify-center gap-2 rounded-md border bg-background px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent"
-              >
-                {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-                {!sidebarCollapsed && <span>Collapse</span>}
-              </button>
+              <div className="mb-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed((value) => !value)}
+                  className="flex w-full items-center justify-center gap-2 rounded-md border bg-background px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-accent"
+                >
+                  {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+                  {!sidebarCollapsed && <span>Collapse</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleManualPeak}
+                  className={"flex w-full items-center justify-center gap-2 rounded-md border px-2 py-2 text-[11px] font-semibold uppercase tracking-wider " + (manualPeak ? "bg-amber-500 text-white" : "bg-background hover:bg-accent")}
+                  title="Toggle peak mode"
+                >
+                  {manualPeak ? <Sparkles className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                  {!sidebarCollapsed && (manualPeak ? "Peak on" : "Peak off")}
+                </button>
+              </div>
               <nav className="flex flex-wrap gap-2 lg:flex-col lg:gap-2">
                 <Link to="/admin" className={`flex items-center rounded-md py-2 text-sm font-semibold hover:bg-accent ${sidebarCollapsed ? "justify-center px-2" : "gap-2 px-3"}`}>
                   <ShieldCheck className="h-4 w-4" /> {!sidebarCollapsed && "Orders"}

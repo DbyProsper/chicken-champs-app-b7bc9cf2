@@ -238,10 +238,12 @@ export function getBrowserLocation(): Promise<{ lat: number; lng: number }> {
 }
 
 export const DELIVERY_STATUS_FLOW = ["pending", "accepted", "handed_to_driver", "picked_up", "on_the_way", "delivered"] as const;
-export type DeliveryStatus = (typeof DELIVERY_STATUS_FLOW)[number];
+export type DeliveryStatus = (typeof DELIVERY_STATUS_FLOW)[number] | "cancelled";
 export type OrderStatus = "pending" | "preparing" | "ready" | "handed_to_driver" | "out_for_delivery" | "completed" | "cancelled";
 
 export function resolveOrderDisplayStatus(orderStatus: string, deliveryStatus?: string | null): OrderStatus | null {
+  if (orderStatus === "cancelled") return "cancelled";
+  if (deliveryStatus === "cancelled") return "cancelled";
   if (deliveryStatus === "handed_to_driver") return "handed_to_driver";
   if (deliveryStatus === "picked_up" || deliveryStatus === "on_the_way") return "out_for_delivery";
   if (deliveryStatus === "delivered") return "completed";
@@ -295,6 +297,7 @@ export const DELIVERY_STATUS_LABEL: Record<string, string> = {
   picked_up: "Picked up",
   on_the_way: "Out for delivery",
   delivered: "Delivered",
+  cancelled: "Cancelled",
 };
 
 export type DeliveryMode = "normal" | "peak";

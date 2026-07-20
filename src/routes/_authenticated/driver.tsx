@@ -58,11 +58,10 @@ function DriverPage() {
   const [orders, setOrders] = useState<Record<string, Order>>({});
   const [items, setItems] = useState<Record<string, ItemRow[]>>({});
   const [branches, setBranches] = useState<Record<string, Branch>>({});
-  const [tab, setTab] = useState<"available" | "active" | "history">("available");
+  const [tab, setTab] = useState<"available" | "active" | "history" | "settings">("available");
   const [settings, setSettings] = useState({ bankName: "", bankAccountNumber: "", bankAccountHolder: "", bankNote: "", phone: "" });
   const [approvalBlocked, setApprovalBlocked] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<"settings" | "deliveries">("deliveries");
   const [historyFilter, setHistoryFilter] = useState<"today" | "week" | "month" | "6months" | "year" | "custom">("week");
   const [customRange, setCustomRange] = useState<{ from?: string; to?: string }>({});
   const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
@@ -171,7 +170,7 @@ function DriverPage() {
 
   const available = useMemo(() => deliveries.filter((d) => d.driver_id === null && d.status !== "delivered"), [deliveries]);
   const active = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status !== "delivered") : []), [deliveries, driver]);
-  const history = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status === "delivered") : []), [deliveries, driver]);
+  const history = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id) : []), [deliveries, driver]);
 
   async function saveSettings() {
     if (!driver) return;
@@ -276,8 +275,6 @@ function DriverPage() {
     );
   }
 
-  const list = tab === "available" ? available : tab === "active" ? active : history;
-  const deliveredMine = history;
   function rangeForFilter(filter: typeof historyFilter) {
     const now = new Date();
     if (filter === "today") return { from: new Date(now.getFullYear(), now.getMonth(), now.getDate()), to: now };
@@ -294,12 +291,14 @@ function DriverPage() {
   }
 
   const { from: _from, to: _to } = rangeForFilter(historyFilter);
-  const deliveredFiltered = deliveredMine.filter((d) => {
+  const historyFiltered = history.filter((d) => {
     const created = new Date(d.created_at);
     return created >= _from && created <= _to;
   });
+  const deliveredFiltered = historyFiltered.filter((d) => d.status === "delivered");
   const earningsCents = deliveredFiltered.reduce((sum, d) => sum + d.delivery_fee_cents, 0);
   const collectedCents = deliveredFiltered.reduce((sum, d) => sum + ((d.payment_status === "paid") ? d.delivery_fee_cents : 0), 0);
+  const list = tab === "available" ? available : tab === "active" ? active : tab === "history" ? historyFiltered : [];
 
   return (
     <div className="min-h-screen bg-muted/40 pb-20">
@@ -318,21 +317,21 @@ function DriverPage() {
           </div>
         </div>
         <div className="mx-auto flex max-w-2xl gap-2 px-4 pb-3">
-          <button onClick={() => { setTab("available"); setActiveTab("deliveries"); }} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "available" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+          <button onClick={() => setTab("available")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "available" ? "bg-brand text-brand-foreground" : "border bg-background")}>
             Available ({available.length})
           </button>
-          <button onClick={() => { setTab("active"); setActiveTab("deliveries"); }} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "active" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+          <button onClick={() => setTab("active")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "active" ? "bg-brand text-brand-foreground" : "border bg-background")}>
             Active ({active.length})
           </button>
-          <button onClick={() => { setTab("history"); setActiveTab("deliveries"); }} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "history" ? "bg-brand text-brand-foreground" : "border bg-background")}>
+          <button onClick={() => setTab("history")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "history" ? "bg-brand text-brand-foreground" : "border bg-background")}>
             History & Earnings
           </button>
-          <button onClick={() => setActiveTab("settings")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (activeTab === "settings" ? "bg-brand text-brand-foreground" : "border bg-background")}>Settings</button>
+          <button onClick={() => setTab("settings")} className={"flex-1 rounded-full px-3 py-2 text-xs font-bold uppercase " + (tab === "settings" ? "bg-brand text-brand-foreground" : "border bg-background")}>Settings</button>
         </div>
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4 space-y-3">
-        {tab === "history" && activeTab === "deliveries" && (
+        {tab === "history" && (
           <div className="rounded-2xl border bg-card p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -345,22 +344,24 @@ function DriverPage() {
           </div>
         )}
 
-        {tab === "history" && activeTab === "deliveries" && (
-          <div className="rounded-2xl border bg-card p-3 flex items-center gap-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filter</div>
-            {(["today", "week", "month", "6months", "year"] as const).map((f) => (
-              <button key={f} onClick={() => setHistoryFilter(f)} className={"rounded-full px-3 py-1 text-xs font-bold " + (historyFilter === f ? "bg-brand text-brand-foreground" : "bg-background border")}>{f}</button>
-            ))}
-            <button onClick={() => setHistoryFilter("custom")} className={"rounded-full px-3 py-1 text-xs font-bold " + (historyFilter === "custom" ? "bg-brand text-brand-foreground" : "bg-background border")}>Custom</button>
+        {tab === "history" && (
+          <div className="rounded-2xl border bg-card p-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Filter</span>
+              {(["today", "week", "month", "6months", "year"] as const).map((f) => (
+                <button key={f} onClick={() => setHistoryFilter(f)} className={"rounded-full px-3 py-1 text-xs font-bold " + (historyFilter === f ? "bg-brand text-brand-foreground" : "bg-background border")}>{f}</button>
+              ))}
+              <button onClick={() => setHistoryFilter("custom")} className={"rounded-full px-3 py-1 text-xs font-bold " + (historyFilter === "custom" ? "bg-brand text-brand-foreground" : "bg-background border")}>Custom</button>
+            </div>
             {historyFilter === "custom" && (
-              <div className="ml-auto flex items-center gap-2">
-                <input type="date" value={customRange.from ?? ""} onChange={(e) => setCustomRange((c) => ({ ...c, from: e.target.value }))} className="rounded-md border px-2 py-1 text-sm" />
-                <input type="date" value={customRange.to ?? ""} onChange={(e) => setCustomRange((c) => ({ ...c, to: e.target.value }))} className="rounded-md border px-2 py-1 text-sm" />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input type="date" value={customRange.from ?? ""} onChange={(e) => setCustomRange((c) => ({ ...c, from: e.target.value }))} className="w-full rounded-md border px-2 py-2 text-sm" />
+                <input type="date" value={customRange.to ?? ""} onChange={(e) => setCustomRange((c) => ({ ...c, to: e.target.value }))} className="w-full rounded-md border px-2 py-2 text-sm" />
               </div>
             )}
           </div>
         )}
-        {activeTab === "settings" && (
+        {tab === "settings" && (
           <div className="rounded-2xl border bg-card p-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-brand"><Settings2 className="h-4 w-4" /> Driver settings</div>
             <div className="mt-3 grid gap-2">
@@ -376,12 +377,16 @@ function DriverPage() {
             </div>
           </div>
         )}
-        {activeTab === "deliveries" && list.length === 0 && (
+        {tab !== "settings" && list.length === 0 && (
           <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            {tab === "available" ? "No orders waiting for a driver right now." : "You have no active deliveries."}
+            {tab === "available"
+              ? "No orders waiting for a driver right now."
+              : tab === "active"
+              ? "You have no active deliveries."
+              : "No delivery history available for this period."}
           </div>
         )}
-        {activeTab === "deliveries" && list.map((d) => {
+        {tab !== "settings" && list.map((d) => {
           const o = orders[d.order_id];
           const b = o ? branches[o.branch_id] : null;
           const its = items[d.order_id] ?? [];

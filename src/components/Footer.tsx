@@ -14,7 +14,7 @@ export function Footer() {
         <a href="#" aria-label="WhatsApp placeholder" className="inline-flex items-center gap-2 text-muted-foreground hover:text-brand">
           <MessageCircle className="h-5 w-5" /> WhatsApp
         </a>
-        <a href="mailto:info@champs.example" aria-label="Email" className="inline-flex items-center gap-2 text-muted-foreground hover:text-brand">
+        <a href="mailto:champsalice@gmail.com" aria-label="Email" className="inline-flex items-center gap-2 text-muted-foreground hover:text-brand">
           <Mail className="h-5 w-5" /> Email
         </a>
       </div>
