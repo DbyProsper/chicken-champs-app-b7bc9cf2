@@ -251,24 +251,21 @@ export type OrderStatus =
   | "cancelled";
 
 export function resolveOrderDisplayStatus(orderStatus: string, deliveryStatus?: string | null): OrderStatus | null {
-  if (orderStatus === "cancelled") return "cancelled";
-  if (deliveryStatus === "cancelled") return "cancelled";
-  if (
-    orderStatus === "pending" ||
-    orderStatus === "preparing" ||
-    orderStatus === "ready" ||
-    orderStatus === "handed_to_driver" ||
-    orderStatus === "picked_up" ||
-    orderStatus === "on_the_way" ||
-    orderStatus === "out_for_delivery" ||
-    orderStatus === "completed"
-  ) {
+  if (orderStatus === "cancelled" || deliveryStatus === "cancelled") return "cancelled";
+  if (orderStatus === "completed" || deliveryStatus === "delivered") return "completed";
+
+  if (orderStatus === "pending" || orderStatus === "preparing" || orderStatus === "ready") {
     return orderStatus as OrderStatus;
   }
-  if (deliveryStatus === "handed_to_driver") return "handed_to_driver";
-  if (deliveryStatus === "picked_up") return "picked_up";
-  if (deliveryStatus === "on_the_way") return "on_the_way";
-  if (deliveryStatus === "delivered") return "completed";
+
+  if (orderStatus === "handed_to_driver" || deliveryStatus === "handed_to_driver" || orderStatus === "picked_up") {
+    return "handed_to_driver";
+  }
+
+  if (orderStatus === "on_the_way" || orderStatus === "out_for_delivery" || deliveryStatus === "on_the_way") {
+    return "out_for_delivery";
+  }
+
   if (deliveryStatus === "pending" || deliveryStatus === "accepted") return "ready";
   return null;
 }
@@ -310,6 +307,8 @@ export function getDeliveryStatusForOrderStatus(status: string): DeliveryStatus 
     case "picked_up":
       return "picked_up";
     case "on_the_way":
+      return "on_the_way";
+    case "out_for_delivery":
       return "on_the_way";
     case "completed":
       return "delivered";

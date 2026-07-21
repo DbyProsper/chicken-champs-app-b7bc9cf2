@@ -34,16 +34,14 @@ type Order = {
 type ItemRow = { order_id: string; item_name: string; quantity: number; unit_price_cents: number };
 
 const PICKUP_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "completed"];
-const DELIVERY_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "handed_to_driver", "picked_up", "on_the_way", "out_for_delivery", "completed"];
+const DELIVERY_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "handed_to_driver", "out_for_delivery", "completed"];
 const STATUS_META = {
-  pending: { label: "New", icon: Clock, color: "bg-amber-500" },
+  pending: { label: "Received", icon: Clock, color: "bg-amber-500" },
   preparing: { label: "Preparing", icon: ChefHat, color: "bg-blue-500" },
   ready: { label: "Ready", icon: Package, color: "bg-emerald-500" },
   handed_to_driver: { label: "Handed to driver", icon: Bike, color: "bg-indigo-500" },
-  picked_up: { label: "Picked up", icon: Bike, color: "bg-indigo-500" },
-  on_the_way: { label: "On the way", icon: Bike, color: "bg-purple-500" },
   out_for_delivery: { label: "Out for delivery", icon: Bike, color: "bg-purple-500" },
-  completed: { label: "Completed", icon: CheckCircle2, color: "bg-green-600" },
+  completed: { label: "Delivered", icon: CheckCircle2, color: "bg-green-600" },
   cancelled: { label: "Cancelled", icon: XCircle, color: "bg-neutral-500" },
 } as const;
 
@@ -160,7 +158,7 @@ function Admin() {
         return;
       }
     }
-    const nextStatus = status === "handed_to_driver" ? "ready" : status;
+    const nextStatus = status === "handed_to_driver" ? "handed_to_driver" : status;
     const { error } = await supabase.from("orders").update({ status: nextStatus }).eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -408,16 +406,25 @@ function Admin() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {(["active", "pending", "preparing", "ready", "handed_to_driver", "picked_up", "on_the_way", "out_for_delivery", "completed", "all"] as const).map((f) => (
+          {([
+            { value: "active", label: "Active" },
+            { value: "pending", label: "Received" },
+            { value: "preparing", label: "Preparing" },
+            { value: "ready", label: "Ready" },
+            { value: "handed_to_driver", label: "Handed to driver" },
+            { value: "out_for_delivery", label: "Out for delivery" },
+            { value: "completed", label: "Delivered" },
+            { value: "all", label: "All" },
+          ] as const).map((f) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
+              key={f.value}
+              onClick={() => setFilter(f.value as Order["status"] | "active" | "all")}
               className={
                 "rounded-full px-3 py-1.5 text-xs font-bold uppercase tracking-wider " +
-                (filter === f ? "bg-brand text-brand-foreground" : "bg-background border text-muted-foreground")
+                (filter === f.value ? "bg-brand text-brand-foreground" : "bg-background border text-muted-foreground")
               }
             >
-              {f.replace(/_/g, " ")}
+              {f.label}
             </button>
           ))}
         </div>
@@ -460,7 +467,7 @@ function OrderCard({
   const statusFlow = o.fulfillment === "pickup" ? PICKUP_STATUS_FLOW : DELIVERY_STATUS_FLOW;
   const currentIdx = statusFlow.indexOf(effectiveStatus as Order["status"]);
   const next = currentIdx >= 0 && currentIdx < statusFlow.length - 1 ? statusFlow[currentIdx + 1] : null;
-  const shouldShowNext = !(o.fulfillment === "delivery" && (effectiveStatus === "handed_to_driver" || effectiveStatus === "picked_up" || effectiveStatus === "on_the_way" || effectiveStatus === "out_for_delivery" || effectiveStatus === "completed"));
+  const shouldShowNext = !(o.fulfillment === "delivery" && (effectiveStatus === "completed" || effectiveStatus === "cancelled"));
   const [pinInput, setPinInput] = useState("");
   const [showVerify, setShowVerify] = useState(false);
 
