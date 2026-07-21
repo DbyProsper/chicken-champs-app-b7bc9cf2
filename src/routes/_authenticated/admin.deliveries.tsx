@@ -224,8 +224,8 @@ function DeliveriesPage() {
     load();
   }
 
-  const activeDeliveries = useMemo(() => deliveries.filter((d) => d.status !== "delivered"), [deliveries]);
-  const completed = useMemo(() => deliveries.filter((d) => d.status === "delivered"), [deliveries]);
+  const activeDeliveries = useMemo(() => deliveries.filter((d) => d.status !== "delivered" && d.status !== "cancelled"), [deliveries]);
+  const completed = useMemo(() => deliveries.filter((d) => d.status === "delivered" || d.status === "cancelled"), [deliveries]);
 
   if (loading) return <div className="grid min-h-screen place-items-center"><Loader2 className="h-6 w-6 animate-spin text-brand" /></div>;
 
@@ -366,10 +366,18 @@ function DeliveriesPage() {
               {completed.slice(0, 20).map((d) => {
                 const o = orders[d.order_id];
                 const dr = drivers.find((x) => x.id === d.driver_id);
+                const isCancelled = d.status === "cancelled";
                 return (
-                  <li key={d.id} className="flex justify-between text-xs text-muted-foreground">
+                  <li key={d.id} className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>#{o?.order_number} · {o?.customer_name}</span>
-                    <span>{dr?.name ?? "—"} · {formatZAR(d.delivery_fee_cents)}</span>
+                    <div className="flex items-center gap-2">
+                      {isCancelled ? (
+                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase text-destructive">Cancelled</span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">Delivered</span>
+                      )}
+                      <span>{dr?.name ?? "—"} · {formatZAR(d.delivery_fee_cents)}</span>
+                    </div>
                   </li>
                 );
               })}
