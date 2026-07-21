@@ -258,11 +258,15 @@ export function resolveOrderDisplayStatus(orderStatus: string, deliveryStatus?: 
     return orderStatus as OrderStatus;
   }
 
-  if (orderStatus === "handed_to_driver" || deliveryStatus === "handed_to_driver" || orderStatus === "picked_up") {
+  if (orderStatus === "handed_to_driver" || deliveryStatus === "handed_to_driver") {
     return "handed_to_driver";
   }
 
-  if (orderStatus === "on_the_way" || orderStatus === "out_for_delivery" || deliveryStatus === "on_the_way") {
+  if (orderStatus === "picked_up" || deliveryStatus === "picked_up") {
+    return "picked_up";
+  }
+
+  if (orderStatus === "on_the_way" || orderStatus === "out_for_delivery" || deliveryStatus === "on_the_way" || deliveryStatus === "out_for_delivery") {
     return "out_for_delivery";
   }
 
@@ -323,6 +327,7 @@ export const DELIVERY_STATUS_LABEL: Record<string, string> = {
   handed_to_driver: "Handed to driver",
   picked_up: "Picked up",
   on_the_way: "Out for delivery",
+  out_for_delivery: "Out for delivery",
   delivered: "Delivered",
   cancelled: "Cancelled",
 };
