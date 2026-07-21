@@ -34,7 +34,7 @@ type Order = {
 type ItemRow = { order_id: string; item_name: string; quantity: number; unit_price_cents: number };
 
 const PICKUP_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "completed"];
-const DELIVERY_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "handed_to_driver", "out_for_delivery", "completed"];
+const DELIVERY_STATUS_FLOW: Order["status"][] = ["pending", "preparing", "ready", "handed_to_driver"];
 const STATUS_META = {
   pending: { label: "Received", icon: Clock, color: "bg-amber-500" },
   preparing: { label: "Preparing", icon: ChefHat, color: "bg-blue-500" },

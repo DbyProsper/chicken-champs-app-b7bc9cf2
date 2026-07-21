@@ -18,7 +18,7 @@ const orderQuery = (number: string) =>
     queryFn: async () => {
       const { data: order, error } = await supabase
         .from("orders")
-        .select("id, order_number, customer_name, customer_phone, fulfillment, delivery_notes, subtotal_cents, delivery_fee_cents, status, created_at, pickup_pin, branch_id, verified_at, user_id")
+        .select("id, order_number, customer_name, customer_phone, fulfillment, delivery_notes, subtotal_cents, delivery_fee_cents, status, created_at, pickup_pin, branch_id, verified_at, user_id, driver_id")
         .eq("order_number", number)
         .maybeSingle();
       if (error) throw error;
@@ -38,13 +38,14 @@ const orderQuery = (number: string) =>
       let driver: { name: string; phone: string; bank_name: string | null; bank_account_number: string | null; bank_account_holder: string | null } | null = null;
       let aheadCount = 0;
       const d: any = delivery;
-      if (d?.driver_id) {
+      const driverId = d?.driver_id ?? order?.driver_id ?? null;
+      if (driverId) {
         const { data: dr } = await (supabase.from("drivers") as any)
           .select("name, phone, bank_name, bank_account_number, bank_account_holder")
-          .eq("id", d.driver_id)
+          .eq("id", driverId)
           .maybeSingle();
         driver = dr;
-        if (d.queue_position) aheadCount = Math.max(0, (d.queue_position as number) - 1);
+        if (d?.queue_position) aheadCount = Math.max(0, (d.queue_position as number) - 1);
       }
       return { order, items: itemsData ?? [], branch, delivery: d, driver, aheadCount };
     },
@@ -97,6 +98,7 @@ function OrderPage() {
 
   const isDelivery = data?.order.fulfillment === "delivery";
   const effectiveStatus = resolveOrderDisplayStatus(data?.order.status ?? "pending", data?.delivery?.status ?? null) ?? data?.order.status ?? "pending";
+  const effectiveDriverId = data?.delivery?.driver_id ?? data?.order.driver_id ?? null;
   const STATUS_LABEL = isDelivery ? DELIVERY_STATUS_LABEL : PICKUP_STATUS_LABEL;
   const STATUS_STEPS = isDelivery ? DELIVERY_STEPS : PICKUP_STEPS;
 
@@ -200,10 +202,10 @@ function OrderPage() {
               <span className="font-bold">{d.estimated_eta_min}–{d.estimated_eta_max} min</span>
             </div>
           )}
-          {isDelivery && d?.driver_id && aheadCount > 0 && (
+          {isDelivery && effectiveDriverId && aheadCount > 0 && (
             <div className="mt-1 text-xs opacity-90">Driver has {aheadCount} {aheadCount === 1 ? "delivery" : "deliveries"} before yours</div>
           )}
-          {isDelivery && !d?.driver_id && (
+          {isDelivery && !effectiveDriverId && (
             <div className="mt-3 text-xs opacity-90">Finding a driver for you…</div>
           )}
         </div>
