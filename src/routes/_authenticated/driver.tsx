@@ -168,8 +168,8 @@ function DriverPage() {
     }
   }, [driver, deliveries, orders]);
 
-  const available = useMemo(() => deliveries.filter((d) => d.driver_id === null && d.status !== "delivered"), [deliveries]);
-  const active = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status !== "delivered") : []), [deliveries, driver]);
+  const available = useMemo(() => deliveries.filter((d) => d.driver_id === null && d.status !== "delivered" && d.status !== "cancelled"), [deliveries]);
+  const active = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id && d.status !== "delivered" && d.status !== "cancelled") : []), [deliveries, driver]);
   const history = useMemo(() => (driver ? deliveries.filter((d) => d.driver_id === driver.id) : []), [deliveries, driver]);
 
   async function saveSettings() {
