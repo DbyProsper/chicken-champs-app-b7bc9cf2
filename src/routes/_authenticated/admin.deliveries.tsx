@@ -210,6 +210,16 @@ function DeliveriesPage() {
     if (driverId) patch.status = "accepted";
     const { error } = await supabase.from("deliveries").update(patch).eq("id", deliveryId);
     if (error) return toast.error(error.message);
+
+    const delivery = deliveries.find((entry) => entry.id === deliveryId);
+    if (delivery?.order_id) {
+      const { error: orderError } = await supabase.from("orders").update({ driver_id: driverId }).eq("id", delivery.order_id);
+      if (orderError) {
+        toast.error(orderError.message);
+        return;
+      }
+    }
+
     toast.success("Assignment updated");
     load();
   }
