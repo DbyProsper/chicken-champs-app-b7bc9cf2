@@ -21,27 +21,39 @@ type Order = {
 
 type Branch = { id: string; city: string };
 
-type RevenueRange = "day" | "week" | "month" | "year" | "lifetime";
+type RevenueRange = "day" | "week" | "month" | "year" | "lifetime" | "custom";
+
+type RevenueRangeSelection = { type: RevenueRange; customDate?: string };
 
 const REVENUE_RANGES: { value: RevenueRange; label: string }[] = [
-  { value: "day", label: "Past day" },
+  { value: "day", label: "Today" },
   { value: "week", label: "Past week" },
   { value: "month", label: "Past month" },
   { value: "year", label: "Past year" },
   { value: "lifetime", label: "Lifetime" },
+  { value: "custom", label: "Custom" },
 ];
 
-function matchesRevenueRange(createdAt: string, range: RevenueRange) {
-  const now = new Date();
+function matchesRevenueRange(createdAt: string, selection: RevenueRangeSelection) {
   const created = new Date(createdAt);
   if (Number.isNaN(created.getTime())) return false;
-  if (range === "lifetime") return true;
+  if (selection.type === "lifetime") return true;
+  if (selection.type === "custom") {
+    if (!selection.customDate) return true;
+    const selected = new Date(selection.customDate);
+    if (Number.isNaN(selected.getTime())) return false;
+    return created.getFullYear() === selected.getFullYear() && created.getMonth() === selected.getMonth() && created.getDate() === selected.getDate();
+  }
 
+  const now = new Date();
   const start = new Date(now);
-  if (range === "day") start.setDate(now.getDate() - 1);
-  if (range === "week") start.setDate(now.getDate() - 7);
-  if (range === "month") start.setMonth(now.getMonth() - 1);
-  if (range === "year") start.setFullYear(now.getFullYear() - 1);
+  if (selection.type === "day") {
+    start.setHours(0, 0, 0, 0);
+    return created >= start;
+  }
+  if (selection.type === "week") start.setDate(now.getDate() - 7);
+  if (selection.type === "month") start.setMonth(now.getMonth() - 1);
+  if (selection.type === "year") start.setFullYear(now.getFullYear() - 1);
 
   return created >= start;
 }
@@ -50,7 +62,8 @@ function RevenueOverviewPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFilter, setBranchFilter] = useState<string>("all");
-  const [range, setRange] = useState<RevenueRange>("month");
+  const [range, setRange] = useState<RevenueRange>("day");
+  const [customDate, setCustomDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     let active = true;
@@ -68,8 +81,8 @@ function RevenueOverviewPage() {
 
   const filteredOrders = useMemo(() => orders.filter((order) => {
     if (branchFilter !== "all" && order.branch_id !== branchFilter) return false;
-    return matchesRevenueRange(order.created_at, range);
-  }), [branchFilter, orders, range]);
+    return matchesRevenueRange(order.created_at, { type: range, customDate });
+  }), [branchFilter, orders, range, customDate]);
 
   const revenue = filteredOrders.filter((order) => order.status !== "cancelled").reduce((sum, order) => sum + order.subtotal_cents, 0);
   const deliveryRevenue = filteredOrders.filter((order) => order.fulfillment === "delivery" && order.status !== "cancelled").reduce((sum, order) => sum + order.subtotal_cents, 0);
@@ -110,6 +123,12 @@ function RevenueOverviewPage() {
             {REVENUE_RANGES.map((item) => (
               <button key={item.value} type="button" onClick={() => setRange(item.value)} className={"rounded-full px-3 py-1.5 text-xs font-semibold " + (range === item.value ? "bg-brand text-brand-foreground" : "border bg-background text-muted-foreground")}>{item.label}</button>
             ))}
+            {range === "custom" && (
+              <label className="flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                <span>Date</span>
+                <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="rounded-full border bg-background px-2 py-1 text-xs" />
+              </label>
+            )}
           </div>
         </section>
 
