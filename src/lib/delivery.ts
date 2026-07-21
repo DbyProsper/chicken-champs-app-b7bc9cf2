@@ -263,7 +263,7 @@ export function resolveOrderDisplayStatus(orderStatus: string, deliveryStatus?: 
   }
 
   if (orderStatus === "picked_up" || deliveryStatus === "picked_up") {
-    return "picked_up";
+    return "out_for_delivery";
   }
 
   if (orderStatus === "on_the_way" || orderStatus === "out_for_delivery" || deliveryStatus === "on_the_way" || deliveryStatus === "out_for_delivery") {

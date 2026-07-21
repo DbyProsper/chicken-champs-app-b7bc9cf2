@@ -84,7 +84,7 @@ const DELIVERY_STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 const PICKUP_STEPS = ["pending", "preparing", "ready", "completed"] as const;
-const DELIVERY_STEPS = ["pending", "preparing", "ready", "handed_to_driver", "picked_up", "out_for_delivery", "completed"] as const;
+const DELIVERY_STEPS = ["pending", "preparing", "ready", "handed_to_driver", "out_for_delivery", "completed"] as const;
 
 
 function OrderPage() {
@@ -98,6 +98,9 @@ function OrderPage() {
 
   const isDelivery = data?.order.fulfillment === "delivery";
   const effectiveStatus = resolveOrderDisplayStatus(data?.order.status ?? "pending", data?.delivery?.status ?? null) ?? data?.order.status ?? "pending";
+  const visibleStatus = isDelivery && (effectiveStatus === "picked_up" || effectiveStatus === "on_the_way" || effectiveStatus === "out_for_delivery")
+    ? "out_for_delivery"
+    : effectiveStatus;
   const effectiveDriverId = data?.delivery?.driver_id ?? data?.order.driver_id ?? null;
   const STATUS_LABEL = isDelivery ? DELIVERY_STATUS_LABEL : PICKUP_STATUS_LABEL;
   const STATUS_STEPS = isDelivery ? DELIVERY_STEPS : PICKUP_STEPS;
@@ -180,8 +183,8 @@ function OrderPage() {
 
   if (!data) return <div className="p-6 text-sm">Order not found.</div>;
   const { order, items, branch, delivery, driver, aheadCount } = data;
-  const currentIdx = (STATUS_STEPS as readonly string[]).indexOf(effectiveStatus);
-  const waText = orderStatusMessage(order.order_number, effectiveStatus, order.customer_name);
+  const currentIdx = (STATUS_STEPS as readonly string[]).indexOf(visibleStatus);
+  const waText = orderStatusMessage(order.order_number, visibleStatus, order.customer_name);
   const verifyPayload = `champs:${order.order_number}:${order.pickup_pin}`;
   const d: any = delivery;
 
@@ -194,7 +197,7 @@ function OrderPage() {
           <div className="mt-3 text-xs uppercase tracking-widest opacity-80">Order number</div>
           <div className="font-display text-4xl">{order.order_number}</div>
           <div className="mt-4 inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-bold uppercase tracking-wider">
-            {STATUS_LABEL[effectiveStatus] ?? effectiveStatus}
+            {STATUS_LABEL[visibleStatus] ?? visibleStatus}
           </div>
           {isDelivery && d?.estimated_eta_min != null && d?.estimated_eta_max != null && (
             <div className="mt-3 text-sm">
@@ -210,7 +213,7 @@ function OrderPage() {
           )}
         </div>
 
-        {effectiveStatus !== "cancelled" && (
+        {visibleStatus !== "cancelled" && (
           <div className="mt-4 rounded-2xl border border-border bg-card p-4">
             <div className="flex items-center justify-between">
               {STATUS_STEPS.map((s, i) => (
@@ -232,17 +235,21 @@ function OrderPage() {
         )}
 
         {/* Delivery: driver + payment card */}
-        {isDelivery && driver && (
+        {isDelivery && effectiveDriverId && (
           <div className="mt-4 rounded-2xl border-2 border-brand/30 bg-card p-5 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Your driver</div>
-                <div className="font-display text-lg text-brand">{driver.name}</div>
-                <a href={`tel:${driver.phone}`} className="text-xs text-muted-foreground underline">{driver.phone}</a>
+                <div className="font-display text-lg text-brand">{driver?.name ?? "Driver assigned"}</div>
+                {driver?.phone ? (
+                  <a href={`tel:${driver.phone}`} className="text-xs text-muted-foreground underline">{driver.phone}</a>
+                ) : (
+                  <div className="text-xs text-muted-foreground">Driver details will appear here as soon as they are available.</div>
+                )}
               </div>
-                  <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-bold uppercase text-brand">{d?.status ?? "assigned"}</span>
+              <span className="rounded-full bg-brand/10 px-2 py-1 text-[10px] font-bold uppercase text-brand">{d?.status ?? "assigned"}</span>
             </div>
-            {(driver.bank_name || driver.bank_account_number) && (
+            {(driver?.bank_name || driver?.bank_account_number) && (
               <div className="rounded-xl bg-muted/40 p-3 text-sm">
                 <div className="flex items-center gap-2 font-bold text-brand"><Landmark className="h-4 w-4" /> Pay your driver directly</div>
                 <div className="mt-2 space-y-1 text-xs">
