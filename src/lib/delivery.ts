@@ -239,39 +239,63 @@ export function getBrowserLocation(): Promise<{ lat: number; lng: number }> {
 
 export const DELIVERY_STATUS_FLOW = ["pending", "accepted", "handed_to_driver", "picked_up", "on_the_way", "delivered"] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUS_FLOW)[number] | "cancelled";
-export type OrderStatus = "pending" | "preparing" | "ready" | "handed_to_driver" | "out_for_delivery" | "completed" | "cancelled";
+export type OrderStatus =
+  | "pending"
+  | "preparing"
+  | "ready"
+  | "handed_to_driver"
+  | "picked_up"
+  | "on_the_way"
+  | "out_for_delivery"
+  | "completed"
+  | "cancelled";
 
 export function resolveOrderDisplayStatus(orderStatus: string, deliveryStatus?: string | null): OrderStatus | null {
   if (orderStatus === "cancelled") return "cancelled";
   if (deliveryStatus === "cancelled") return "cancelled";
-  if (deliveryStatus === "handed_to_driver") return "handed_to_driver";
-  if (deliveryStatus === "picked_up" || deliveryStatus === "on_the_way") return "out_for_delivery";
-  if (deliveryStatus === "delivered") return "completed";
-  switch (orderStatus) {
-    case "pending":
-    case "preparing":
-    case "ready":
-    case "out_for_delivery":
-    case "completed":
-    case "cancelled":
-      return orderStatus as OrderStatus;
-    default:
-      return null;
+  if (
+    orderStatus === "pending" ||
+    orderStatus === "preparing" ||
+    orderStatus === "ready" ||
+    orderStatus === "handed_to_driver" ||
+    orderStatus === "picked_up" ||
+    orderStatus === "on_the_way" ||
+    orderStatus === "out_for_delivery" ||
+    orderStatus === "completed"
+  ) {
+    return orderStatus as OrderStatus;
   }
+  if (deliveryStatus === "handed_to_driver") return "handed_to_driver";
+  if (deliveryStatus === "picked_up") return "picked_up";
+  if (deliveryStatus === "on_the_way") return "on_the_way";
+  if (deliveryStatus === "delivered") return "completed";
+  if (deliveryStatus === "pending" || deliveryStatus === "accepted") return "ready";
+  return null;
 }
 
-export type PersistedOrderStatus = "pending" | "preparing" | "ready" | "out_for_delivery" | "completed" | "cancelled";
+export type PersistedOrderStatus =
+  | "pending"
+  | "preparing"
+  | "ready"
+  | "handed_to_driver"
+  | "picked_up"
+  | "on_the_way"
+  | "out_for_delivery"
+  | "completed"
+  | "cancelled";
 
 export function getOrderStatusForDeliveryStatus(status: string): PersistedOrderStatus | null {
   switch (status as DeliveryStatus) {
     case "pending":
       return "pending";
     case "accepted":
-    case "handed_to_driver":
       return "ready";
+    case "handed_to_driver":
+      return "handed_to_driver";
     case "picked_up":
+      return "picked_up";
     case "on_the_way":
-      return "out_for_delivery";
+      return "on_the_way";
     case "delivered":
       return "completed";
     default:
@@ -283,6 +307,10 @@ export function getDeliveryStatusForOrderStatus(status: string): DeliveryStatus 
   switch (status) {
     case "handed_to_driver":
       return "handed_to_driver";
+    case "picked_up":
+      return "picked_up";
+    case "on_the_way":
+      return "on_the_way";
     case "completed":
       return "delivered";
     default:

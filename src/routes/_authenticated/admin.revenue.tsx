@@ -16,7 +16,7 @@ type Order = {
   fulfillment: "pickup" | "delivery";
   created_at: string;
   branch_id: string;
-  status: "pending" | "preparing" | "out_for_delivery" | "completed" | "cancelled";
+  status: "pending" | "preparing" | "ready" | "handed_to_driver" | "picked_up" | "on_the_way" | "out_for_delivery" | "completed" | "cancelled";
 };
 
 type Branch = { id: string; city: string };

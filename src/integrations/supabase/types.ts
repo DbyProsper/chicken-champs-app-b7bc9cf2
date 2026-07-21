@@ -960,10 +960,13 @@ export type Database = {
       order_status:
         | "pending"
         | "preparing"
+        | "ready"
+        | "handed_to_driver"
+        | "picked_up"
+        | "on_the_way"
         | "out_for_delivery"
         | "completed"
         | "cancelled"
-        | "ready"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1096,10 +1099,13 @@ export const Constants = {
       order_status: [
         "pending",
         "preparing",
+        "ready",
+        "handed_to_driver",
+        "picked_up",
+        "on_the_way",
         "out_for_delivery",
         "completed",
         "cancelled",
-        "ready",
       ],
     },
   },
