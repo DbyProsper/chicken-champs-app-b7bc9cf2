@@ -76,7 +76,7 @@ function Admin() {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(200),
-      supabase.from("deliveries").select("order_id, status").neq("status", "delivered"),
+      supabase.from("deliveries").select("order_id, status"),
       supabase.from("delivery_settings").select("manual_peak_mode").eq("id", "default").maybeSingle(),
     ]);
     const list = (os as Order[]) ?? [];
