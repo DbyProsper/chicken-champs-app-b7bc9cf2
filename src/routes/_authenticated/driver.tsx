@@ -211,7 +211,11 @@ function DriverPage() {
       .map((x) => x.queue_position ?? 0);
     const nextPos = (currentPositions.length ? Math.max(...currentPositions) : 0) + 1;
     await updateDelivery(d.id, { driver_id: driver.id, status: "accepted", queue_position: nextPos });
-    await supabase.from("orders").update({ driver_id: driver.id }).eq("id", d.order_id);
+    const { error: orderError } = await supabase.from("orders").update({ driver_id: driver.id } as never).eq("id", d.order_id);
+    if (orderError) {
+      toast.error(orderError.message || "Could not attach the order to your driver record");
+      return;
+    }
     toast.success("Order accepted — get moving and keep it safe");
   }
   async function nextStatus(d: Delivery) {
@@ -223,7 +227,13 @@ function DriverPage() {
     await updateDelivery(d.id, patch);
     const orderStatus = getOrderStatusForDeliveryStatus(next);
     if (orderStatus) {
-      await supabase.from("orders").update({ status: orderStatus as any, driver_id: d.driver_id ?? undefined }).eq("id", d.order_id);
+      const orderPatch: { status: string; driver_id?: string | null } = { status: orderStatus as any };
+      if (d.driver_id) orderPatch.driver_id = d.driver_id;
+      const { error: orderError } = await supabase.from("orders").update(orderPatch as never).eq("id", d.order_id);
+      if (orderError) {
+        toast.error(orderError.message || "Could not update the order status for the customer");
+        return;
+      }
     }
     if (next === "on_the_way") {
       toast.success("Stay sharp and keep the route moving");
